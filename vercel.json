@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/sync-qb",
+      "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/cron/reminders",
+      "schedule": "0 21 * * *"
+    },
+    {
+      "path": "/api/cron/escalation",
+      "schedule": "0 */4 * * *"
+    }
+  ]
+}
