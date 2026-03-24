@@ -151,8 +151,10 @@ export async function proxy(request: NextRequest) {
 
   // If on a public route and authenticated, redirect to their portal
   if (isPublicRoute && user) {
-    // Get user role from metadata (set during signup / custom access token hook)
-    const role = (user.app_metadata?.role as UserRole) || "customer";
+    // Get user role from metadata — check app_metadata first, then user_metadata
+    const role = (user.app_metadata?.role as UserRole)
+      || (user.user_metadata?.role as UserRole)
+      || "customer";
     const dashboardUrl = ROLE_DASHBOARDS[role];
     return NextResponse.redirect(new URL(dashboardUrl, request.url));
   }
@@ -174,7 +176,9 @@ export async function proxy(request: NextRequest) {
 
   // If authenticated, verify role matches the portal they're accessing
   if (user) {
-    const role = (user.app_metadata?.role as UserRole) || "customer";
+    const role = (user.app_metadata?.role as UserRole)
+      || (user.user_metadata?.role as UserRole)
+      || "customer";
 
     for (const [prefix, requiredRole] of Object.entries(ROLE_ROUTE_MAP)) {
       if (pathname.startsWith(prefix) && role !== requiredRole) {
