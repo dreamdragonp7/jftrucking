@@ -7,6 +7,8 @@ import { X } from "lucide-react";
 import { cn } from "@/lib/utils/cn";
 import { BottomSheet, type BottomSheetProps } from "./BottomSheet";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
+import { useScrollLock } from "@/hooks/useScrollLock";
+import { useFocusTrap } from "@/hooks/useFocusTrap";
 import { useState } from "react";
 
 export interface ModalProps {
@@ -73,15 +75,12 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal(
     return () => document.removeEventListener("keydown", handleEscape);
   }, [isOpen, closeOnEscape, onClose]);
 
-  // Body scroll lock (desktop only — BottomSheet handles its own)
-  useEffect(() => {
-    if (!isOpen || (isMobile && !forceModal)) return;
-    const original = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = original;
-    };
-  }, [isOpen, isMobile, forceModal]);
+  // Body scroll lock (desktop only -- BottomSheet handles its own)
+  const isDesktopModal = isOpen && (!isMobile || forceModal);
+  useScrollLock({ enabled: isDesktopModal, lockId: "modal" });
+
+  // Focus trap for WCAG accessibility (desktop modal only)
+  useFocusTrap(modalRef, { enabled: isDesktopModal });
 
   const handleBackdropClick = useCallback(
     (e: React.MouseEvent) => {
@@ -98,40 +97,25 @@ export const Modal = forwardRef<HTMLDivElement, ModalProps>(function Modal(
       <BottomSheet
         isOpen={isOpen}
         onClose={onClose}
-        snapPoints={[{ height: 90 }]}
-        header={
-          title ? (
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-lg font-semibold text-[var(--color-text-primary)]">
-                  {title}
-                </h2>
-                {description && (
-                  <p className="text-sm text-[var(--color-text-secondary)] mt-1">
-                    {description}
-                  </p>
-                )}
-              </div>
-              {showCloseButton && (
-                <button
-                  onClick={onClose}
-                  aria-label="Close"
-                  className="touch-target flex items-center justify-center rounded-lg hover:bg-surface-hover"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              )}
-            </div>
-          ) : undefined
-        }
+        snapPoints={[0.5, 0.9]}
+        title={title}
         {...sheetProps}
       >
-        <div>{children}</div>
-        {footer && (
-          <div className="pt-4 border-t border-[var(--color-border)] mt-4">
-            {footer}
+        <div className="flex flex-col h-full">
+          {description && (
+            <p className="text-sm text-[var(--color-text-secondary)] mb-4">
+              {description}
+            </p>
+          )}
+          <div className="flex-1 overflow-y-auto w-full text-white">
+            {children}
           </div>
-        )}
+          {footer && (
+            <div className="pt-4 border-t border-[var(--color-border)] mt-4 w-full">
+              {footer}
+            </div>
+          )}
+        </div>
       </BottomSheet>
     );
   }

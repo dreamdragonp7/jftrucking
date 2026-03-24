@@ -12,9 +12,14 @@ import { Resend } from "resend";
 
 let resendClient: Resend | null = null;
 
-function getResend(): Resend {
+function getResend(): Resend | null {
   if (!resendClient) {
-    resendClient = new Resend(process.env.RESEND_API_KEY!);
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      console.warn("[Resend] RESEND_API_KEY is not configured");
+      return null;
+    }
+    resendClient = new Resend(apiKey);
   }
   return resendClient;
 }
@@ -37,8 +42,12 @@ export interface EmailResult {
 export async function sendEmail(payload: EmailPayload): Promise<EmailResult> {
   const resend = getResend();
 
+  if (!resend) {
+    throw new Error("Resend is not configured. Set RESEND_API_KEY environment variable.");
+  }
+
   const { data, error } = await resend.emails.send({
-    from: payload.from || "J Fudge Trucking <noreply@jfudgetrucking.com>",
+    from: payload.from || process.env.EMAIL_FROM || "J Fudge Trucking Inc <noreply@resend.dev>",
     to: Array.isArray(payload.to) ? payload.to : [payload.to],
     subject: payload.subject,
     html: payload.html,

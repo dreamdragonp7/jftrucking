@@ -1,32 +1,47 @@
 import type { Metadata } from "next";
-import { BarChart3 } from "lucide-react";
+import { Suspense } from "react";
+import { PageHeader } from "@/components/admin/PageHeader";
+import { Skeleton } from "@/components/ui/skeleton";
+import { loadReportsData } from "./_lib/reports.loader";
+import { ReportsClient } from "./_components/ReportsClient";
 
 export const metadata: Metadata = {
   title: "Reports",
 };
 
+export const dynamic = "force-dynamic";
+
+async function ReportsContent() {
+  const data = await loadReportsData();
+  return <ReportsClient data={data} />;
+}
+
+function ReportsSkeleton() {
+  return (
+    <div className="space-y-4">
+      <Skeleton className="h-10 w-96" />
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {[0, 1, 2].map((i) => (
+          <Skeleton key={i} className="h-20 rounded-lg" />
+        ))}
+      </div>
+      <Skeleton className="h-[400px] rounded-lg" />
+    </div>
+  );
+}
+
 export default function ReportsPage() {
   return (
-    <div className="animate-slide-up-fade">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-brown-700 text-gold-300">
-          <BarChart3 className="w-5 h-5" />
-        </div>
-        <div>
-          <h1 className="text-xl font-bold text-[var(--color-text-primary)]">
-            Reports
-          </h1>
-          <p className="text-sm text-[var(--color-text-secondary)]">
-            Revenue, volume, and performance analytics
-          </p>
-        </div>
-      </div>
+    <div className="animate-slide-up-fade space-y-6">
+      <PageHeader
+        iconName="bar-chart"
+        title="Reports"
+        description="Revenue, margin, and performance analytics"
+      />
 
-      <div className="rounded-xl border border-[var(--color-border)] bg-surface p-6">
-        <p className="text-sm text-[var(--color-text-muted)]">
-          Reports interface loading...
-        </p>
-      </div>
+      <Suspense fallback={<ReportsSkeleton />}>
+        <ReportsContent />
+      </Suspense>
     </div>
   );
 }

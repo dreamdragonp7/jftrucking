@@ -1,32 +1,13 @@
 import type { Metadata } from "next";
-import { Building2 } from "lucide-react";
+import * as customersData from "@/lib/data/customers.data";
+import { CustomersClient } from "./_components/CustomersClient";
 
 export const metadata: Metadata = {
   title: "Customers",
 };
 
-export default function CustomersPage() {
-  return (
-    <div className="animate-slide-up-fade">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-brown-700 text-gold-300">
-          <Building2 className="w-5 h-5" />
-        </div>
-        <div>
-          <h1 className="text-xl font-bold text-[var(--color-text-primary)]">
-            Customers
-          </h1>
-          <p className="text-sm text-[var(--color-text-secondary)]">
-            Manage customer accounts and contacts
-          </p>
-        </div>
-      </div>
+export default async function CustomersPage() {
+  const { data: customers } = await customersData.getAll({ limit: 500 });
 
-      <div className="rounded-xl border border-[var(--color-border)] bg-surface p-6">
-        <p className="text-sm text-[var(--color-text-muted)]">
-          Customers interface loading...
-        </p>
-      </div>
-    </div>
-  );
+  return <CustomersClient customers={customers} />;
 }

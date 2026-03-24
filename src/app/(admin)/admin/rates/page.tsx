@@ -1,32 +1,32 @@
 import type { Metadata } from "next";
-import { Calculator } from "lucide-react";
+import * as ratesData from "@/lib/data/rates.data";
+import * as customersData from "@/lib/data/customers.data";
+import * as carriersData from "@/lib/data/carriers.data";
+import * as materialsData from "@/lib/data/materials.data";
+import * as sitesData from "@/lib/data/sites.data";
+import { RatesClient } from "./_components/RatesClient";
 
 export const metadata: Metadata = {
   title: "Rates",
 };
 
-export default function RatesPage() {
-  return (
-    <div className="animate-slide-up-fade">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-brown-700 text-gold-300">
-          <Calculator className="w-5 h-5" />
-        </div>
-        <div>
-          <h1 className="text-xl font-bold text-[var(--color-text-primary)]">
-            Rates
-          </h1>
-          <p className="text-sm text-[var(--color-text-secondary)]">
-            Material pricing and hauling rates
-          </p>
-        </div>
-      </div>
+export default async function RatesPage() {
+  const [ratesResult, customersResult, carriersResult, materialsResult, sitesResult] =
+    await Promise.all([
+      ratesData.getAll({ limit: 500 }),
+      customersData.getAll({ status: "active", limit: 500 }),
+      carriersData.getAll({ status: "active", limit: 500 }),
+      materialsData.getAll({ status: "active" }),
+      sitesData.getAll({ status: "active", limit: 500 }),
+    ]);
 
-      <div className="rounded-xl border border-[var(--color-border)] bg-surface p-6">
-        <p className="text-sm text-[var(--color-text-muted)]">
-          Rates interface loading...
-        </p>
-      </div>
-    </div>
+  return (
+    <RatesClient
+      rates={ratesResult.data}
+      customers={customersResult.data.map((c) => ({ id: c.id, name: c.name }))}
+      carriers={carriersResult.data.map((c) => ({ id: c.id, name: c.name }))}
+      materials={materialsResult.data.map((m) => ({ id: m.id, name: m.name }))}
+      sites={sitesResult.data.map((s) => ({ id: s.id, name: s.name }))}
+    />
   );
 }

@@ -5,7 +5,7 @@ export default function NotFound() {
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center px-4">
       <Logo size="lg" className="mb-8" />
-      <h1 className="text-4xl font-bold text-gold-300 mb-2">404</h1>
+      <h1 className="text-4xl font-bold text-brand-brown mb-2">404</h1>
       <p className="text-lg text-[var(--color-text-secondary)] mb-8 text-center">
         This page doesn&apos;t exist. It may have been moved or the URL is
         incorrect.

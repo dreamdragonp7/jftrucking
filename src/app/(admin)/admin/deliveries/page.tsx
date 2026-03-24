@@ -1,32 +1,71 @@
 import type { Metadata } from "next";
-import { Package } from "lucide-react";
+import { Suspense } from "react";
+import { PageHeader } from "@/components/admin/PageHeader";
+import { Skeleton } from "@/components/ui/skeleton";
+import { createClient } from "@/lib/supabase/server";
+import { DeliveriesClient } from "./_components/DeliveriesClient";
 
 export const metadata: Metadata = {
   title: "Deliveries",
 };
 
+export const dynamic = "force-dynamic";
+
+async function DeliveriesContent() {
+  const supabase = await createClient();
+  if (!supabase) return <DeliveriesClient deliveries={[]} />;
+
+  const { data, error } = await supabase
+    .from("deliveries")
+    .select(`
+      *,
+      driver:drivers(name),
+      truck:trucks(number),
+      material:materials(name),
+      delivery_site:sites(name),
+      dispatch:dispatches(
+        scheduled_date,
+        carrier:carriers(name),
+        purchase_order:purchase_orders(
+          po_number,
+          customer:customers(name)
+        )
+      )
+    `)
+    .order("delivered_at", { ascending: false })
+    .limit(200);
+
+  if (error) {
+    console.error("[deliveries] Failed to fetch:", error);
+    return <DeliveriesClient deliveries={[]} />;
+  }
+
+  return <DeliveriesClient deliveries={data ?? []} />;
+}
+
+function DeliveriesSkeleton() {
+  return (
+    <div className="space-y-3">
+      <Skeleton className="h-10 w-64" />
+      {[0, 1, 2, 3, 4].map((i) => (
+        <Skeleton key={i} className="h-16 w-full rounded-lg" />
+      ))}
+    </div>
+  );
+}
+
 export default function DeliveriesPage() {
   return (
-    <div className="animate-slide-up-fade">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-brown-700 text-gold-300">
-          <Package className="w-5 h-5" />
-        </div>
-        <div>
-          <h1 className="text-xl font-bold text-[var(--color-text-primary)]">
-            Deliveries
-          </h1>
-          <p className="text-sm text-[var(--color-text-secondary)]">
-            Track all active and completed deliveries
-          </p>
-        </div>
-      </div>
+    <div className="animate-slide-up-fade space-y-6">
+      <PageHeader
+        iconName="truck"
+        title="Deliveries"
+        description="Track all deliveries and confirmation status"
+      />
 
-      <div className="rounded-xl border border-[var(--color-border)] bg-surface p-6">
-        <p className="text-sm text-[var(--color-text-muted)]">
-          Deliveries interface loading...
-        </p>
-      </div>
+      <Suspense fallback={<DeliveriesSkeleton />}>
+        <DeliveriesContent />
+      </Suspense>
     </div>
   );
 }

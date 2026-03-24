@@ -1,2 +1,2 @@
-export { sendSMS } from "./client";
-export type { SMSPayload, SMSResult } from "./client";
+export { sendSMS, sendDispatchSMS, isTwilioConfigured } from "./client";
+export type { SMSPayload, SMSResult, DispatchSMSDetails } from "./client";

@@ -1,32 +1,24 @@
 import type { Metadata } from "next";
-import { DollarSign } from "lucide-react";
+import {
+  getPaymentsAction,
+  getSettlementPaymentsAction,
+} from "./_actions/payments.actions";
+import { PaymentsClient } from "./_components/PaymentsClient";
 
 export const metadata: Metadata = {
   title: "Payments",
 };
 
-export default function PaymentsPage() {
-  return (
-    <div className="animate-slide-up-fade">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-brown-700 text-gold-300">
-          <DollarSign className="w-5 h-5" />
-        </div>
-        <div>
-          <h1 className="text-xl font-bold text-[var(--color-text-primary)]">
-            Payments
-          </h1>
-          <p className="text-sm text-[var(--color-text-secondary)]">
-            Track carrier payments and customer receipts
-          </p>
-        </div>
-      </div>
+export default async function PaymentsPage() {
+  const [paymentsResult, settlementsResult] = await Promise.all([
+    getPaymentsAction(),
+    getSettlementPaymentsAction(),
+  ]);
 
-      <div className="rounded-xl border border-[var(--color-border)] bg-surface p-6">
-        <p className="text-sm text-[var(--color-text-muted)]">
-          Payments interface loading...
-        </p>
-      </div>
-    </div>
+  return (
+    <PaymentsClient
+      payments={paymentsResult.success ? paymentsResult.data.data : []}
+      settlements={settlementsResult.success ? settlementsResult.data : []}
+    />
   );
 }

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { MotionProvider } from "@/components/shared/MotionProvider";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -33,11 +34,11 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#4C1C06",
+  themeColor: "#F5E6D3",
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  maximumScale: 5,
+  userScalable: true,
   viewportFit: "cover",
 };
 
@@ -49,13 +50,15 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} dark h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="min-h-dvh flex flex-col bg-background text-foreground">
-        <TooltipProvider>
-          {children}
-        </TooltipProvider>
+      <body className="min-h-dvh flex flex-col bg-background text-foreground" suppressHydrationWarning>
+        <MotionProvider>
+          <TooltipProvider>
+            {children}
+          </TooltipProvider>
+        </MotionProvider>
         <Toaster
           position="top-center"
           toastOptions={{

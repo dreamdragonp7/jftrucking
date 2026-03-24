@@ -1,13 +1,33 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { requireRole } from "@/lib/supabase/auth";
 
 /**
  * SMS notification endpoint.
  * Sends SMS via Twilio for delivery confirmations, dispatch alerts, etc.
  *
- * Agent 5 (Notifications) will implement the Twilio integration.
+ * Security: Only admin users can trigger SMS notifications.
  */
 export async function POST(request: NextRequest) {
-  const body = await request.json();
+  // Authenticate — only admins can send SMS notifications
+  try {
+    await requireRole("admin");
+  } catch {
+    return NextResponse.json(
+      { error: "Unauthorized" },
+      { status: 401 }
+    );
+  }
+
+  let body;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json(
+      { error: "Malformed JSON body" },
+      { status: 400 }
+    );
+  }
+
   const { to, message, type } = body as {
     to: string;
     message: string;
@@ -23,11 +43,12 @@ export async function POST(request: NextRequest) {
 
   console.log(`[SMS] Sending ${type} notification to ${to}`);
 
-  // Twilio sending will be implemented by Agent 5
-  return NextResponse.json({
-    status: "queued",
-    to,
-    type,
-    timestamp: new Date().toISOString(),
-  });
+  // Twilio sending is not yet configured
+  return NextResponse.json(
+    {
+      status: "not_implemented",
+      error: "SMS sending is not yet configured",
+    },
+    { status: 501 }
+  );
 }

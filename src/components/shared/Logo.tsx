@@ -2,10 +2,10 @@ import Image from "next/image";
 import { cn } from "@/lib/utils/cn";
 
 const SIZES = {
-  sm: { width: 32, height: 32 },
-  md: { width: 48, height: 48 },
-  lg: { width: 80, height: 80 },
-  xl: { width: 120, height: 120 },
+  sm: { width: 48, height: 48 },
+  md: { width: 64, height: 64 },
+  lg: { width: 96, height: 96 },
+  xl: { width: 128, height: 128 },
 } as const;
 
 interface LogoProps {
@@ -33,14 +33,9 @@ export function Logo({ size = "md", className, showText = false }: LogoProps) {
         className="flex-shrink-0"
       />
       {showText && (
-        <div className="flex flex-col">
-          <span className="text-lg font-bold text-gold-300 leading-tight">
-            J Fudge Trucking
-          </span>
-          <span className="text-xs text-[var(--color-text-muted)] leading-tight">
-            Aggregate Hauling
-          </span>
-        </div>
+        <span className="text-lg font-bold text-brand-gold leading-tight">
+          J Fudge Trucking
+        </span>
       )}
     </div>
   );

@@ -1,342 +1,172 @@
-"use client";
+'use client';
 
-import {
-  forwardRef,
-  useCallback,
-  useEffect,
-  useImperativeHandle,
-  useMemo,
-  useRef,
-  useState,
-  type ReactNode,
-} from "react";
-import { createPortal } from "react-dom";
-import {
-  motion,
-  useDragControls,
-  AnimatePresence,
-  type PanInfo,
-} from "framer-motion";
-import { cn } from "@/lib/utils/cn";
-import { useReducedMotion } from "@/hooks/useReducedMotion";
-import { useViewportDimensions } from "@/hooks/useViewportDimensions";
-
-const DRAG_HANDLE_HEIGHT = 48;
-const FAST_SWIPE_VELOCITY = 800;
-
-export interface SnapPoint {
-  height: number; // percentage of viewport (1-100)
-  label?: string;
-}
-
-export interface BottomSheetRef {
-  snapTo: (index: number) => void;
-  expand: () => void;
-  collapse: () => void;
-  dismiss: () => void;
-  currentSnap: number;
-}
+import React, { useCallback, useEffect, useRef } from 'react';
+import { motion, AnimatePresence, PanInfo, useDragControls } from 'framer-motion';
+import { X } from 'lucide-react';
 
 export interface BottomSheetProps {
   isOpen: boolean;
   onClose: () => void;
-  snapPoints?: SnapPoint[];
+  children: React.ReactNode;
+  title?: string;
+  /** Snap points as percentages of viewport height (0-1) */
+  snapPoints?: number[];
+  /** Initial snap point index */
   initialSnap?: number;
-  dismissible?: boolean;
-  dismissVelocity?: number;
-  header?: ReactNode;
-  showHandle?: boolean;
-  hasBackdrop?: boolean;
-  backdropOpacity?: number;
-  onSnapChange?: (index: number) => void;
-  className?: string;
-  children: ReactNode;
-  dragFromHandleOnly?: boolean;
+  /** Allow dragging to dismiss */
+  enableDrag?: boolean;
+  /** Close on backdrop click */
+  closeOnBackdrop?: boolean;
 }
 
-const DEFAULT_SNAP_POINTS: SnapPoint[] = [
-  { height: 40, label: "Peek" },
-  { height: 90, label: "Full" },
-];
+const DEFAULT_SNAP_POINTS = [0.5, 0.9];
 
-export const BottomSheet = forwardRef<BottomSheetRef, BottomSheetProps>(
-  function BottomSheet(
-    {
-      isOpen,
-      onClose,
-      snapPoints = DEFAULT_SNAP_POINTS,
-      initialSnap = 0,
-      dismissible = true,
-      dismissVelocity = 500,
-      header,
-      showHandle = true,
-      hasBackdrop = true,
-      backdropOpacity = 0.5,
-      onSnapChange,
-      className,
-      children,
-      dragFromHandleOnly = true,
+export const BottomSheet: React.FC<BottomSheetProps> = ({
+  isOpen,
+  onClose,
+  children,
+  title,
+  snapPoints = DEFAULT_SNAP_POINTS,
+  initialSnap = 0,
+  enableDrag = true,
+  closeOnBackdrop = true
+}) => {
+  const sheetRef = useRef<HTMLDivElement>(null);
+  const dragControls = useDragControls();
+  const [currentSnap, setCurrentSnap] = React.useState(initialSnap);
+
+  // Calculate height based on snap point
+  const getHeightFromSnap = (snapIndex: number) => {
+    const snap = snapPoints[snapIndex] ?? snapPoints[0];
+    return `${snap * 100}vh`;
+  };
+
+  // Handle drag end - snap to nearest point or close
+  const handleDragEnd = useCallback(
+    (_: unknown, info: PanInfo) => {
+      const velocity = info.velocity.y;
+      const offset = info.offset.y;
+
+      // If dragging down fast or far enough, close
+      if (velocity > 500 || offset > 100) {
+        onClose();
+        return;
+      }
+
+      // If dragging up, snap to next point
+      if (velocity < -300 && currentSnap < snapPoints.length - 1) {
+        setCurrentSnap(currentSnap + 1);
+        return;
+      }
+
+      // If dragging down, snap to previous point
+      if (velocity > 300 && currentSnap > 0) {
+        setCurrentSnap(currentSnap - 1);
+      }
     },
-    ref
-  ) {
-    const effectiveSnapPoints =
-      snapPoints.length > 0 ? snapPoints : DEFAULT_SNAP_POINTS;
+    [currentSnap, snapPoints.length, onClose]
+  );
 
-    const [portalTarget, setPortalTarget] = useState<HTMLElement | null>(null);
-    const dragControls = useDragControls();
-    const [currentSnap, setCurrentSnap] = useState(initialSnap);
-    const prefersReducedMotion = useReducedMotion();
-    const { height: viewportHeight, isReady: viewportReady } =
-      useViewportDimensions();
+  // Handle backdrop click
+  const handleBackdropClick = useCallback(() => {
+    if (closeOnBackdrop) {
+      onClose();
+    }
+  }, [closeOnBackdrop, onClose]);
 
-    const sheetRef = useRef<HTMLDivElement>(null);
-    const isDragFromHandle = useRef(false);
-    const isClosingRef = useRef(false);
-
-    useEffect(() => {
-      if (isOpen) {
-        setPortalTarget(document.body);
-      } else {
-        setPortalTarget(null);
+  // Handle escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
       }
-    }, [isOpen]);
+    };
 
-    useEffect(() => {
-      isClosingRef.current = !isOpen;
-    }, [isOpen]);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
 
-    // Body scroll lock
-    useEffect(() => {
-      if (!isOpen) return;
-      const original = document.body.style.overflow;
-      document.body.style.overflow = "hidden";
-      return () => {
-        document.body.style.overflow = original;
-      };
-    }, [isOpen]);
+  // Lock body scroll when open
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
 
-    const springTransition = useMemo(() => {
-      if (prefersReducedMotion) {
-        return { type: "tween" as const, duration: 0.01 };
-      }
-      return { type: "spring" as const, stiffness: 300, damping: 30 };
-    }, [prefersReducedMotion]);
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
 
-    const getSnapPixels = useCallback(() => {
-      return effectiveSnapPoints.map((sp) => {
-        const clampedHeight = Math.max(1, Math.min(100, sp.height));
-        return (clampedHeight / 100) * viewportHeight;
-      });
-    }, [effectiveSnapPoints, viewportHeight]);
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="fixed inset-0 z-overlay bg-black/60 backdrop-blur-sm"
+            onClick={handleBackdropClick}
+            aria-hidden="true"
+          />
 
-    const getSnapHeight = useCallback(
-      (snapIndex: number) => {
-        const snapPixels = getSnapPixels();
-        return snapPixels[snapIndex] || snapPixels[0];
-      },
-      [getSnapPixels]
-    );
-
-    const snapToNearest = useCallback(
-      (y: number, velocity: number) => {
-        const snapPixels = getSnapPixels();
-        const currentHeight = viewportHeight - y;
-
-        if (dismissible && velocity > FAST_SWIPE_VELOCITY) {
-          onClose();
-          return;
-        }
-
-        if (
-          dismissible &&
-          velocity > dismissVelocity &&
-          currentHeight < snapPixels[0] * 0.5
-        ) {
-          onClose();
-          return;
-        }
-
-        let nearestIndex = 0;
-        let nearestDistance = Math.abs(currentHeight - snapPixels[0]);
-
-        snapPixels.forEach((snapHeight, index) => {
-          const distance = Math.abs(currentHeight - snapHeight);
-          if (distance < nearestDistance) {
-            nearestDistance = distance;
-            nearestIndex = index;
-          }
-        });
-
-        if (Math.abs(velocity) > 200) {
-          const direction = velocity > 0 ? -1 : 1;
-          const targetIndex = nearestIndex + direction;
-          if (targetIndex >= 0 && targetIndex < snapPixels.length) {
-            nearestIndex = targetIndex;
-          } else if (targetIndex < 0 && dismissible) {
-            onClose();
-            return;
-          }
-        }
-
-        setCurrentSnap(nearestIndex);
-        onSnapChange?.(nearestIndex);
-      },
-      [
-        dismissible,
-        dismissVelocity,
-        getSnapPixels,
-        onClose,
-        onSnapChange,
-        viewportHeight,
-      ]
-    );
-
-    const handleDragEnd = useCallback(
-      (_: unknown, info: PanInfo) => {
-        if (isClosingRef.current) {
-          isDragFromHandle.current = false;
-          return;
-        }
-        if (dragFromHandleOnly && !isDragFromHandle.current) return;
-        snapToNearest(info.point.y, info.velocity.y);
-        isDragFromHandle.current = false;
-      },
-      [snapToNearest, dragFromHandleOnly]
-    );
-
-    const handleDragStart = useCallback(
-      (event: React.PointerEvent) => {
-        if (!dragFromHandleOnly) {
-          isDragFromHandle.current = true;
-          return;
-        }
-        const sheet = sheetRef.current;
-        if (!sheet) {
-          isDragFromHandle.current = false;
-          return;
-        }
-        const sheetRect = sheet.getBoundingClientRect();
-        const relativeY = event.clientY - sheetRect.top;
-        isDragFromHandle.current = relativeY <= DRAG_HANDLE_HEIGHT;
-      },
-      [dragFromHandleOnly]
-    );
-
-    useImperativeHandle(ref, () => ({
-      snapTo: (index: number) => {
-        if (index >= 0 && index < effectiveSnapPoints.length) {
-          setCurrentSnap(index);
-          onSnapChange?.(index);
-        }
-      },
-      expand: () => {
-        const lastIndex = effectiveSnapPoints.length - 1;
-        setCurrentSnap(lastIndex);
-        onSnapChange?.(lastIndex);
-      },
-      collapse: () => {
-        setCurrentSnap(0);
-        onSnapChange?.(0);
-      },
-      dismiss: onClose,
-      currentSnap,
-    }));
-
-    const targetHeight = useMemo(
-      () => getSnapHeight(currentSnap),
-      [currentSnap, getSnapHeight]
-    );
-
-    if (!portalTarget || !viewportReady) return null;
-
-    return createPortal(
-      <AnimatePresence>
-        {isOpen && (
-          <div
-            className="fixed inset-0 z-sheet pointer-events-auto"
+          {/* Sheet */}
+          <motion.div
+            ref={sheetRef}
             role="dialog"
             aria-modal="true"
+            aria-labelledby={title ? 'bottom-sheet-title' : undefined}
+            initial={{ y: '100%' }}
+            animate={{ y: 0, height: getHeightFromSnap(currentSnap) }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+            drag={enableDrag ? 'y' : false}
+            dragControls={dragControls}
+            dragConstraints={{ top: 0, bottom: 0 }}
+            dragElastic={{ top: 0.1, bottom: 0.5 }}
+            onDragEnd={handleDragEnd}
+            className="fixed bottom-0 left-0 right-0 z-sheet flex flex-col
+              bg-surface-elevated rounded-t-[32px] shadow-2xl
+              border border-white/5 touch-none"
           >
-            {hasBackdrop && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: backdropOpacity }}
-                exit={{ opacity: 0 }}
-                onClick={dismissible ? onClose : undefined}
-                className="absolute inset-0 bg-black"
-                aria-hidden="true"
-              />
+            {/* Drag handle */}
+            <div
+              className="flex-shrink-0 pt-4 pb-3 cursor-grab active:cursor-grabbing"
+              onPointerDown={(e) => enableDrag && dragControls.start(e)}
+            >
+              <div className="mx-auto w-12 h-1.5 rounded-full bg-white/20" />
+            </div>
+
+            {/* Header */}
+            {title && (
+              <div className="flex items-center justify-between px-6 pb-4 border-b border-white/10">
+                <h2
+                  id="bottom-sheet-title"
+                  className="text-xl font-semibold text-white tracking-tight"
+                >
+                  {title}
+                </h2>
+                <button
+                  onClick={onClose}
+                  className="p-2 -mr-2 rounded-full hover:bg-white/10 transition-colors"
+                  aria-label="Close"
+                >
+                  <X className="w-5 h-5 text-gray-400" />
+                </button>
+              </div>
             )}
 
-            <motion.div
-              ref={sheetRef}
-              drag="y"
-              dragControls={dragControls}
-              dragListener={!dragFromHandleOnly}
-              dragConstraints={{ top: 0 }}
-              dragElastic={0.2}
-              onPointerDown={dragFromHandleOnly ? undefined : handleDragStart}
-              onDragEnd={handleDragEnd}
-              animate={
-                isOpen
-                  ? { y: 0, height: targetHeight || getSnapHeight(0) }
-                  : { y: "100%", height: getSnapHeight(0) }
-              }
-              initial={{ y: "100%" }}
-              transition={springTransition}
-              className={cn(
-                "absolute bottom-0 left-0 right-0",
-                "flex flex-col",
-                "bg-surface",
-                "rounded-t-2xl",
-                "border-t border-[var(--color-border)]",
-                "shadow-xl",
-                "max-h-[95vh]",
-                className
-              )}
-              style={{
-                paddingBottom: "env(safe-area-inset-bottom, 0px)",
-                minHeight: "10vh",
-              }}
-            >
-              {showHandle && (
-                <div
-                  className={cn(
-                    "flex justify-center pt-3 pb-2",
-                    "cursor-grab active:cursor-grabbing",
-                    "touch-none select-none"
-                  )}
-                  onPointerDown={(e) => {
-                    isDragFromHandle.current = true;
-                    dragControls.start(e);
-                  }}
-                >
-                  <div className="w-12 h-1.5 rounded-full bg-gold-300/30" />
-                </div>
-              )}
-
-              {header && (
-                <div className="px-4 pb-3 border-b border-[var(--color-border)] bg-surface">
-                  {header}
-                </div>
-              )}
-
-              <div
-                className={cn(
-                  "flex-1 min-h-0",
-                  "overflow-y-auto overscroll-contain",
-                  "px-4 py-4",
-                  "bg-surface"
-                )}
-                style={{ touchAction: "pan-y" }}
-              >
-                {children}
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>,
-      portalTarget
-    );
-  }
-);
+            {/* Content */}
+            <div className="flex-1 overflow-y-auto overscroll-contain p-6 scrollbar-hide">
+              {children}
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  );
+};

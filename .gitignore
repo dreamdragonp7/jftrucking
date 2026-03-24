@@ -44,3 +44,14 @@ public/swe-worker*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# business data (sensitive, not for repo)
+nene-qb-data/
+
+# master reference docs (local only, sensitive business data)
+JFT-MASTER.md
+jfudge_master_reference.md
+new-driver.md
+QUICKBOOKS_API_RESEARCH.md
+ARCHITECTURE_BLUEPRINT.md
+texas-legal-regulatory-research.md

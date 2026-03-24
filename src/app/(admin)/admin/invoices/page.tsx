@@ -1,32 +1,24 @@
 import type { Metadata } from "next";
-import { FileText } from "lucide-react";
+import {
+  getInvoicesAction,
+  getCustomersForInvoiceAction,
+} from "./_actions/invoices.actions";
+import { InvoicesClient } from "./_components/InvoicesClient";
 
 export const metadata: Metadata = {
   title: "Invoices",
 };
 
-export default function InvoicesPage() {
-  return (
-    <div className="animate-slide-up-fade">
-      <div className="flex items-center gap-3 mb-6">
-        <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-brown-700 text-gold-300">
-          <FileText className="w-5 h-5" />
-        </div>
-        <div>
-          <h1 className="text-xl font-bold text-[var(--color-text-primary)]">
-            Invoices
-          </h1>
-          <p className="text-sm text-[var(--color-text-secondary)]">
-            Generate and manage customer invoices
-          </p>
-        </div>
-      </div>
+export default async function InvoicesPage() {
+  const [invoicesResult, customersResult] = await Promise.all([
+    getInvoicesAction(),
+    getCustomersForInvoiceAction(),
+  ]);
 
-      <div className="rounded-xl border border-[var(--color-border)] bg-surface p-6">
-        <p className="text-sm text-[var(--color-text-muted)]">
-          Invoices interface loading...
-        </p>
-      </div>
-    </div>
+  return (
+    <InvoicesClient
+      invoices={invoicesResult.success ? invoicesResult.data.data : []}
+      customers={customersResult.success ? customersResult.data : []}
+    />
   );
 }
