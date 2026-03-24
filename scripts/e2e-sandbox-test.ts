@@ -270,7 +270,7 @@ async function main() {
   }
 
   // Clean up notifications for test users
-  const testUserEmails = [
+  const testUserEmails: string[] = [
     ...Object.values(TEST_ACCOUNTS).map((a) => a.email),
     ...Object.values(PENDING_TEST_ACCOUNTS).map((a) => a.email),
   ];
