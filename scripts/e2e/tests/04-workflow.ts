@@ -148,10 +148,10 @@ export async function runWorkflowTests(ctx: TestContext): Promise<TestReporter> 
       if (delErr) throw new Error(`Delivery #${i + 1} failed: ${delErr.message}`);
       deliveryIds.push(delivery!.id);
 
-      // Update dispatch status to completed
+      // Update dispatch status to delivered then completed
       await supabase
         .from("dispatches")
-        .update({ status: "completed" })
+        .update({ status: "delivered" })
         .eq("id", ctx.dispatchIds![i]);
     }
 
@@ -331,12 +331,12 @@ export async function runWorkflowTests(ctx: TestContext): Promise<TestReporter> 
       const { data: ip } = await supabase.from("dispatches").select("status").eq("id", lcId).single();
       transitions.push(ip?.status ?? "?");
 
-      // in_progress -> completed
-      await supabase.from("dispatches").update({ status: "completed" }).eq("id", lcId);
+      // in_progress -> delivered
+      await supabase.from("dispatches").update({ status: "delivered" }).eq("id", lcId);
       const { data: comp } = await supabase.from("dispatches").select("status").eq("id", lcId).single();
       transitions.push(comp?.status ?? "?");
 
-      const expectedSequence = ["dispatched", "acknowledged", "in_progress", "completed"];
+      const expectedSequence = ["dispatched", "acknowledged", "in_progress", "delivered"];
       const matchesExpected = transitions.every((s, i) => s === expectedSequence[i]);
 
       // Cleanup: delete the lifecycle test dispatch

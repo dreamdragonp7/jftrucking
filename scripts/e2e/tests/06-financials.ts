@@ -185,11 +185,12 @@ export async function runFinancialTests(ctx: TestContext): Promise<TestReporter>
         .from("payments")
         .insert({
           invoice_id: ctx.invoiceId,
+          customer_id: ctx.customerId,
           amount: ctx.invoiceTotal!,
           payment_method: "ach",
-          payment_date: today.toISOString().split("T")[0],
-          reference_number: "TEST-ACH-001",
-          notes: "E2E test payment",
+          status: "completed",
+          paid_at: today.toISOString(),
+          recorded_at: new Date().toISOString(),
         })
         .select("id")
         .single();
@@ -270,7 +271,13 @@ export async function runFinancialTests(ctx: TestContext): Promise<TestReporter>
       // Dispatch fee = $1000/week x weeks in period
       const hauling = settlement.hauling_amount;
 
-      reporter.pass(
+      // Verify total = hauling + dispatch_fee
+      const totalMatchesComponents = Math.abs(
+        settlement.total_amount - (hauling + (settlement.dispatch_fee ?? 0))
+      ) < 0.01;
+
+      reporter.assert(
+        totalMatchesComponents && hauling > 0,
         step,
         "Settlement hauling amount",
         `Hauling: $${hauling}, Dispatch: $${settlement.dispatch_fee}, Total: $${settlement.total_amount}`

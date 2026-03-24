@@ -16,6 +16,8 @@
 // MUST be first -- patches @/lib/supabase/server to work outside Next.js
 import "./lib/patch-server-client";
 
+import * as fs from "node:fs";
+import * as path from "node:path";
 import {
   createAdminClient,
   assertSandboxMode,
@@ -286,6 +288,8 @@ async function main() {
     total: number;
   }> = [];
 
+  const allFailedSteps: Array<{ suite: string; step: number; name: string; details: string[] }> = [];
+
   for (const suite of suites) {
     console.log("\n" + "=".repeat(60));
     try {
@@ -298,6 +302,8 @@ async function main() {
         skipped: suiteReporter.skipCount,
         total: suiteReporter.totalCount,
       });
+      // Collect failed steps for the summary
+      allFailedSteps.push(...suiteReporter.failedResults);
     } catch (err: any) {
       console.error(`\n  SUITE CRASHED: ${suite.name}: ${err.message}\n`);
       masterReporter.fail(0, `${suite.name} CRASHED`, err.message);
@@ -308,6 +314,7 @@ async function main() {
         skipped: 0,
         total: 1,
       });
+      allFailedSteps.push({ suite: suite.name, step: 0, name: "CRASH", details: [err.message] });
     }
   }
 
@@ -315,37 +322,76 @@ async function main() {
   // Combined Report
   // =========================================================================
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+  const reportLines: string[] = [];
 
-  console.log("\n\n" + "=".repeat(60));
-  console.log("  COMBINED E2E TEST REPORT");
-  console.log("=".repeat(60));
-  console.log("");
+  function out(line: string) {
+    console.log(line);
+    reportLines.push(line);
+  }
+
+  out("\n\n" + "=".repeat(60));
+  out("  COMBINED E2E TEST REPORT");
+  out("=".repeat(60));
+  out("");
 
   for (const result of suiteResults) {
     const status = result.failed === 0 ? "PASS" : "FAIL";
     const marker = result.failed === 0 ? "+" : "x";
     const pad = ".".repeat(Math.max(2, 35 - result.name.length));
-    console.log(
+    out(
       `  [${marker}] ${result.name} ${pad} ${status}  (${result.passed}/${result.total} passed, ${result.skipped} skipped)`
     );
   }
 
-  console.log("");
-  console.log("=".repeat(60));
-  console.log(
+  out("");
+  out("=".repeat(60));
+  out(
     `  Total: ${masterReporter.totalCount}  |  ` +
       `Passed: ${masterReporter.passCount}  |  ` +
       `Failed: ${masterReporter.failCount}  |  ` +
       `Skipped: ${masterReporter.skipCount}`
   );
-  console.log(`  Time: ${elapsed}s`);
-  console.log("=".repeat(60));
+  out(`  Time: ${elapsed}s`);
+  out("=".repeat(60));
+
+  // Print failed step summary
+  if (allFailedSteps.length > 0) {
+    out("");
+    out("  FAILED STEPS:");
+    out("  " + "-".repeat(56));
+    for (const f of allFailedSteps) {
+      out(`  [${f.suite}] Step ${f.step}: ${f.name}`);
+      for (const d of f.details) {
+        out(`    -> ${d.slice(0, 120)}`);
+      }
+    }
+    out("  " + "-".repeat(56));
+  }
 
   if (masterReporter.failCount > 0) {
-    console.log(`\n  ${masterReporter.failCount} test(s) FAILED.`);
-    process.exit(1);
+    out(`\n  ${masterReporter.failCount} test(s) FAILED.`);
   } else {
-    console.log("\n  All tests PASSED.");
+    out("\n  All tests PASSED.");
+  }
+
+  // =========================================================================
+  // Save results to disk
+  // =========================================================================
+  try {
+    const resultsDir = path.resolve(__dirname, "results");
+    if (!fs.existsSync(resultsDir)) {
+      fs.mkdirSync(resultsDir, { recursive: true });
+    }
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+    const resultsFile = path.join(resultsDir, `${timestamp}.txt`);
+    fs.writeFileSync(resultsFile, reportLines.join("\n") + "\n", "utf-8");
+    console.log(`\n  Results saved to: ${resultsFile}`);
+  } catch (saveErr: any) {
+    console.error(`  Failed to save results: ${saveErr.message}`);
+  }
+
+  if (masterReporter.failCount > 0) {
+    process.exit(1);
   }
 }
 

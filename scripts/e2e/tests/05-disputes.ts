@@ -92,12 +92,15 @@ export async function runDisputeTests(ctx: TestContext): Promise<TestReporter> {
       .eq("id", delivery.dispatch_id)
       .single();
 
-    // Dispatch may still be "completed" since the delivery was submitted
-    // The dispute affects the delivery, not necessarily the dispatch
-    reporter.pass(
+    // The dispatch should still be in a valid state (not null/undefined)
+    const validStatuses = ["dispatched", "acknowledged", "in_progress", "delivered", "completed", "confirmed"];
+    const isValid = validStatuses.includes(dispatch?.status ?? "");
+
+    reporter.assert(
+      isValid,
       step,
       "Dispatch status after dispute",
-      `Dispatch status: ${dispatch?.status ?? "unknown"}`
+      `Dispatch status: ${dispatch?.status ?? "unknown"} (valid: ${isValid})`
     );
   } catch (err: any) {
     reporter.fail(step, "Dispatch status after dispute", err.message);
@@ -197,7 +200,7 @@ export async function runDisputeTests(ctx: TestContext): Promise<TestReporter> {
         pickup_site_id: ctx.kaufmanSandId,
         delivery_site_id: ctx.friscoLakesId,
         scheduled_date: today,
-        status: "completed",
+        status: "dispatched",
         notes: "E2E reject test dispatch",
       })
       .select("id")

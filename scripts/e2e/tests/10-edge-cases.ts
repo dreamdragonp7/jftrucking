@@ -227,11 +227,13 @@ export async function runEdgeCaseTests(ctx: TestContext): Promise<TestReporter> 
       );
     }
   } catch (err: any) {
-    // Even if it throws, we want to verify it doesn't crash the process
-    reporter.pass(
+    // Throwing is acceptable as long as the error message is meaningful
+    const hasMessage = typeof err.message === "string" && err.message.length > 0;
+    reporter.assert(
+      hasMessage,
       step,
       "QB sync graceful failure",
-      `Threw error (acceptable): ${err.message.slice(0, 80)}`
+      `Threw error (acceptable): ${err.message?.slice(0, 80) ?? "NO MESSAGE"}`
     );
   }
 
@@ -312,11 +314,12 @@ export async function runEdgeCaseTests(ctx: TestContext): Promise<TestReporter> 
       .from("payments")
       .insert({
         invoice_id: partialInvoice!.id,
+        customer_id: ctx.customerId,
         amount: 100,
         payment_method: "check",
-        payment_date: today,
-        reference_number: "TEST-PARTIAL-CHK-001",
-        notes: "E2E partial payment test",
+        status: "completed",
+        paid_at: new Date().toISOString(),
+        recorded_at: new Date().toISOString(),
       })
       .select("id")
       .single();

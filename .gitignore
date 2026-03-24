@@ -47,6 +47,7 @@ next-env.d.ts
 
 # business data (sensitive, not for repo)
 nene-qb-data/
+scripts/e2e/results/
 
 # master reference docs (local only, sensitive business data)
 JFT-MASTER.md

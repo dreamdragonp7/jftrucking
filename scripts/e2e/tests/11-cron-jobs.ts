@@ -388,14 +388,21 @@ export async function runCronJobTests(ctx: TestContext): Promise<TestReporter> {
       return (now - deliveredAt) >= thresholdMs;
     });
 
-    // The escalation cron would auto-confirm these.
-    // Since we just created deliveries today, they shouldn't be past threshold yet.
-    reporter.pass(
+    // Verify: auto_confirm_days is a positive number and the detection logic works
+    const settingValid = autoConfirmDays > 0;
+    // Today's deliveries should NOT be past threshold (just created)
+    const noneFromTodayPastThreshold = pastThreshold.every((d) => {
+      const deliveredAt = new Date(d.delivered_at).toISOString().split("T")[0];
+      return deliveredAt !== new Date().toISOString().split("T")[0];
+    });
+
+    reporter.assert(
+      settingValid && noneFromTodayPastThreshold,
       step,
       "Auto-confirm threshold detection",
       `auto_confirm_days: ${autoConfirmDays}, ` +
         `Pending deliveries: ${pendingDeliveries?.length ?? 0}, ` +
-        `Past threshold: ${pastThreshold.length} (cron would auto-confirm these)`
+        `Past threshold: ${pastThreshold.length} (today's excluded: ${noneFromTodayPastThreshold})`
     );
   } catch (err: any) {
     reporter.fail(step, "Auto-confirm threshold detection", err.message);
@@ -422,11 +429,11 @@ export async function runCronJobTests(ctx: TestContext): Promise<TestReporter> {
           `Success: ${result.success}, Discrepancies: ${result.discrepancies?.length ?? 0}`
         );
       } catch (reconErr: any) {
-        // QB reconciliation might fail if tokens are being refreshed or other issues
-        reporter.pass(
+        // QB reconciliation can throw if tokens expired mid-run — that's a real failure
+        reporter.fail(
           step,
           "QB reconciliation logic",
-          `Reconciliation threw (non-fatal): ${reconErr.message.slice(0, 80)}`
+          `Reconciliation threw: ${reconErr.message.slice(0, 100)}`
         );
       }
     }

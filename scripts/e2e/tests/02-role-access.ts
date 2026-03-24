@@ -161,7 +161,7 @@ export async function runRoleAccessTests(ctx: TestContext): Promise<TestReporter
 
     for (const status of requiredStatuses) {
       // Check for the status key in STATUS_CONFIG
-      const regex = new RegExp(`["']${status}["']\\s*:`, "m");
+      const regex = new RegExp(`\\b${status}\\b\\s*[:}]|["']${status}["']\\s*:`, "m");
       if (!regex.test(gateSource)) {
         missing.push(status);
       }

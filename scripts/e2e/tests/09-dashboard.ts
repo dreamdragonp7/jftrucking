@@ -279,7 +279,8 @@ export async function runDashboardTests(ctx: TestContext): Promise<TestReporter>
     const isConnected = (qbTokens?.length ?? 0) >= 1;
     const lastSyncAt = lastSync?.[0]?.synced_at ?? null;
 
-    reporter.pass(
+    reporter.assert(
+      isConnected,
       step,
       "QB health status",
       `Connected: ${isConnected}, Last sync: ${lastSyncAt ?? "never"}, Failed (24h): ${failedCount ?? 0}`

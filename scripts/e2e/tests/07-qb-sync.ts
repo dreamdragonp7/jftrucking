@@ -502,15 +502,10 @@ export async function runQBSyncTests(ctx: TestContext): Promise<TestReporter> {
   step++;
   try {
     loadEnv();
-    const webhookVerifierToken = process.env.QB_WEBHOOK_VERIFIER_TOKEN;
+    // Use env var if available, otherwise use a test token for offline verification
+    const webhookVerifierToken = process.env.QB_WEBHOOK_VERIFIER_TOKEN || "e2e-test-webhook-verifier-token";
 
-    if (!webhookVerifierToken) {
-      reporter.skip(
-        step,
-        "Webhook HMAC signature test",
-        "QB_WEBHOOK_VERIFIER_TOKEN not set -- requires dev server for full HTTP test"
-      );
-    } else {
+    {
       // Construct a fake webhook payload
       const fakePayload = JSON.stringify({
         eventNotifications: [

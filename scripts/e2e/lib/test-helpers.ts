@@ -399,6 +399,13 @@ export class TestReporter {
     return this.results.length;
   }
 
+  /** Get all failed results with suite name */
+  get failedResults(): Array<{ step: number; name: string; details: string[]; suite: string }> {
+    return this.results
+      .filter((r) => !r.passed)
+      .map((r) => ({ step: r.step, name: r.name, details: r.details, suite: this.suiteName }));
+  }
+
   /** Merge another reporter's results into this one */
   merge(other: TestReporter): void {
     this.results.push(...other.results);
