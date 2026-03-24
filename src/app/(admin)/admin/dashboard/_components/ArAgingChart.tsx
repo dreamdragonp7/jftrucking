@@ -67,14 +67,25 @@ export function ArAgingChart({ data, isLoading }: ArAgingChartProps) {
         <h2 className="text-base font-semibold text-[var(--color-text-primary)]">
           AR Aging
         </h2>
-        {totalOutstanding > 0 && (
-          <span className="text-sm font-mono font-medium text-[var(--color-text-primary)]">
-            ${totalOutstanding.toLocaleString("en-US", {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })}
-          </span>
-        )}
+        <div className="flex items-center gap-3">
+          {totalOutstanding > 0 && (
+            <span className="text-sm font-mono font-medium text-[var(--color-text-primary)]">
+              ${totalOutstanding.toLocaleString("en-US", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </span>
+          )}
+          {/* Link to QBO's A/R Aging report */}
+          <a
+            href="https://app.qbo.intuit.com/app/reportlist"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-brand-gold hover:underline whitespace-nowrap"
+          >
+            View in QuickBooks
+          </a>
+        </div>
       </div>
 
       {!hasData ? (

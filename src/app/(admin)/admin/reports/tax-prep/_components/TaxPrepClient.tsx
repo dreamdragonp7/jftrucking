@@ -174,8 +174,41 @@ export function TaxPrepClient({ data }: TaxPrepClientProps) {
     window.print();
   };
 
+  // QBO vendor tax center URLs
+  const qboSandboxUrl = "https://app.sandbox.qbo.intuit.com/app/vendorstaxcenter";
+  const qboProductionUrl = "https://app.qbo.intuit.com/app/vendorstaxcenter";
+  // Use sandbox in dev, production otherwise
+  const qbo1099Url = process.env.NODE_ENV === "production" ? qboProductionUrl : qboSandboxUrl;
+
   return (
     <div ref={printRef} className="space-y-6">
+      {/* ================================================================ */}
+      {/* QUICKBOOKS 1099 FILING */}
+      {/* ================================================================ */}
+      <Card className="border-[var(--color-border)] bg-[var(--color-surface)] print:hidden">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <FileText className="h-4 w-4 text-brand-gold" />
+            QuickBooks 1099 Filing
+          </CardTitle>
+          <CardDescription>
+            QuickBooks automatically tracks all payments to 1099 vendors. Use QuickBooks to generate and e-file 1099-NEC forms at year end.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <a
+            href={qbo1099Url}
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Button variant="outline" size="sm" className="gap-2">
+              <FileText className="h-3.5 w-3.5" />
+              Open QuickBooks 1099s
+            </Button>
+          </a>
+        </CardContent>
+      </Card>
+
       {/* ================================================================ */}
       {/* PRINT-ONLY HEADER (hidden on screen) */}
       {/* ================================================================ */}

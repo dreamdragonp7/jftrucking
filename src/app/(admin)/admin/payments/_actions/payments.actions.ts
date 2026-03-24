@@ -87,24 +87,85 @@ export async function recordManualPaymentAction(input: {
       failure_reason: null,
     });
 
-    // Update invoice status
-    const newStatus = "paid" as const; // Simplified: any payment marks the invoice as paid
+    // Determine invoice status: compare total payments against invoice total
+    const invoiceTotal = Number(invoice.total ?? invoice.subtotal ?? 0);
+    // Sum existing payments for this invoice (including the one we just created)
+    const { createAdminClient: createAdmin } = await import("@/lib/supabase/admin");
+    const sb = createAdmin();
+    let totalPaid = input.amount;
+    if (sb) {
+      const { data: existingPayments } = await sb
+        .from("payments")
+        .select("amount")
+        .eq("invoice_id", input.invoiceId);
+      totalPaid = (existingPayments ?? []).reduce(
+        (sum: number, p: { amount: number | null }) => sum + Number(p.amount ?? 0),
+        0
+      );
+    }
+    const newStatus = totalPaid >= invoiceTotal ? "paid" as const : "partially_paid" as const;
     await invoicesData.update(input.invoiceId, {
       status: newStatus,
       paid_at: newStatus === "paid" ? input.paidAt : null,
     });
 
     // Sync to QB (non-blocking)
+    let qbInvoiceId = invoice.qb_invoice_id;
     try {
       const { syncInvoiceToQBO } = await import(
         "@/lib/services/quickbooks.service"
       );
       // If invoice is not yet in QB, sync it
-      if (!invoice.qb_invoice_id) {
-        await syncInvoiceToQBO(input.invoiceId);
+      if (!qbInvoiceId) {
+        const syncResult = await syncInvoiceToQBO(input.invoiceId);
+        if (syncResult.success && syncResult.qbInvoiceId) {
+          qbInvoiceId = syncResult.qbInvoiceId;
+        }
       }
     } catch (qbErr) {
       console.error("[Payment] QB invoice sync failed:", qbErr instanceof Error ? qbErr.message : qbErr);
+    }
+
+    // Create QBO Payment linked to QBO Invoice (non-blocking)
+    try {
+      const { getQBClient } = await import(
+        "@/lib/services/quickbooks.service"
+      );
+      const qbClient = await getQBClient();
+      if (qbClient && qbInvoiceId) {
+        // Re-fetch customer for qb_customer_id
+        const { createAdminClient } = await import("@/lib/supabase/admin");
+        const adminSb = createAdminClient();
+        const { data: customer } = await adminSb!
+          .from("customers")
+          .select("qb_customer_id")
+          .eq("id", invoice.customer_id)
+          .single();
+
+        if (customer?.qb_customer_id) {
+          const qbPayment = {
+            CustomerRef: { value: customer.qb_customer_id },
+            TotalAmt: input.amount,
+            Line: [
+              {
+                Amount: input.amount,
+                LinkedTxn: [
+                  { TxnId: qbInvoiceId, TxnType: "Invoice" },
+                ],
+              },
+            ],
+          };
+          const result = await qbClient.createPayment(qbPayment);
+          if (result?.Id) {
+            await adminSb!
+              .from("payments")
+              .update({ qb_payment_id: String(result.Id) })
+              .eq("id", payment.id);
+          }
+        }
+      }
+    } catch (qbErr) {
+      console.warn("[Payment] QBO payment sync failed (non-critical):", qbErr);
     }
 
     revalidatePath("/admin/payments");

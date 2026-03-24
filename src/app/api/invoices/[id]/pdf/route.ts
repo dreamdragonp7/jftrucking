@@ -11,9 +11,13 @@ import type { InvoiceWithDetails } from "@/types/database";
  *
  * Generates an invoice PDF on-the-fly and returns it as a downloadable PDF.
  * Auth: admin can download any invoice; customer can only download their own.
+ *
+ * Query params:
+ *   ?source=qbo  — fetch the native QBO PDF instead of generating one
+ *                  (requires invoice to have a qb_invoice_id)
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
@@ -53,7 +57,41 @@ export async function GET(
       );
     }
 
-    // Render the PDF to buffer
+    // ---- QBO Native PDF (optional: ?source=qbo) ----
+    const source = request.nextUrl.searchParams.get("source");
+    if (source === "qbo" && invoice.qb_invoice_id) {
+      try {
+        const { getClient } = await import("@/lib/integrations/quickbooks");
+        const qbClient = await getClient();
+        if (qbClient) {
+          const pdfUrl = `${qbClient.baseUrl}/v3/company/${qbClient.realmId}/invoice/${invoice.qb_invoice_id}/pdf?minorversion=75`;
+          const res = await fetch(pdfUrl, {
+            headers: {
+              Authorization: `Bearer ${qbClient.tokens.accessToken}`,
+              Accept: "application/pdf",
+            },
+          });
+          if (res.ok) {
+            const pdfBuffer = await res.arrayBuffer();
+            return new NextResponse(pdfBuffer, {
+              headers: {
+                "Content-Type": "application/pdf",
+                "Content-Disposition": `inline; filename="invoice-${invoice.invoice_number}-qbo.pdf"`,
+                "Cache-Control": "private, max-age=60",
+              },
+            });
+          }
+          console.warn(
+            `[api/invoices/pdf] QBO PDF fetch failed (${res.status}), falling back to JFT PDF`
+          );
+        }
+      } catch (qboErr) {
+        console.warn("[api/invoices/pdf] QBO PDF error, falling back to JFT PDF:", qboErr);
+      }
+      // Fall through to JFT's @react-pdf generation if QBO fetch fails
+    }
+
+    // ---- JFT Custom PDF (default) ----
     const pdfElement = React.createElement(InvoicePDF, { invoice });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const pdfBuffer = await renderToBuffer(pdfElement as any);

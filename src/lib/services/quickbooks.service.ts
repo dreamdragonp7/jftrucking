@@ -489,6 +489,8 @@ export async function syncInvoiceToQBO(
       TxnDate: invoice.created_at.split("T")[0],
       DueDate: invoice.due_date,
       Line: qbLines,
+      // EmailStatus: "NeedToSend" enables free Pay Now ACH link for customers
+      EmailStatus: "NeedToSend",
       BillEmail: customer.billing_email
         ? { Address: customer.billing_email }
         : undefined,
@@ -669,6 +671,18 @@ export async function syncSettlementToQBO(
         Description: description,
         AccountBasedExpenseLineDetail: {
           AccountRef: { name: qbExpenseAccount },
+        },
+      });
+    }
+
+    // Add dispatch fee as separate line item if > 0
+    if (settlement.dispatch_fee && settlement.dispatch_fee > 0) {
+      qbLines.push({
+        Amount: settlement.dispatch_fee,
+        DetailType: "AccountBasedExpenseLineDetail",
+        Description: `Dispatch Fee - ${settlement.period_start} to ${settlement.period_end}`,
+        AccountBasedExpenseLineDetail: {
+          AccountRef: { name: "Dispatch Fees" },
         },
       });
     }
@@ -913,12 +927,13 @@ export async function syncPaymentFromQBO(
         .select("amount")
         .eq("invoice_id", invoice.id);
 
+      const paymentAmount = linkedInvoice.Amount ?? totalAmt;
       const totalPaid = (existingPayments ?? []).reduce(
-        (sum, p) => sum + (p.amount ?? 0),
+        (sum: number, p: { amount: number | null }) => sum + Number(p.amount ?? 0),
         0
       );
-
-      const newStatus = "paid" as const; // Simplified: any payment marks as paid
+      const invoiceTotal = Number(invoice.total ?? 0);
+      const newStatus = totalPaid >= invoiceTotal ? "paid" as const : "partially_paid" as const;
 
       const { error: statusErr } = await supabase
         .from("invoices")

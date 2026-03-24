@@ -452,8 +452,18 @@ export class QBClient {
   // ---- Payment ----
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  createPayment(payment: Record<string, unknown>): Promise<any> {
+    return this.promisify("createPayment", payment);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   getPayment(id: string): Promise<any> {
     return this.promisify("getPayment", id);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  deletePayment(payment: Record<string, unknown>): Promise<any> {
+    return this.promisify("deletePayment", payment);
   }
 
   // ---- Attachable (upload) ----

@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Ban, Phone, Mail } from "lucide-react";
+import { Ban, Clock, ShieldX, UserX, XCircle, Phone, Mail } from "lucide-react";
 import { Logo } from "@/components/shared/Logo";
 import { JFT_COMPANY } from "@/lib/constants/company";
 import type { ProfileStatus } from "@/types/database";
@@ -25,12 +25,40 @@ const STATUS_CONFIG: Record<string, {
   title: string;
   message: string;
 }> = {
+  pending: {
+    icon: Clock,
+    iconBg: "bg-amber-100",
+    iconColor: "text-amber-600",
+    title: "Account Pending Approval",
+    message: "Your account is pending approval. An administrator will review your application.",
+  },
   inactive: {
     icon: Ban,
     iconBg: "bg-zinc-100",
     iconColor: "text-zinc-500",
     title: "Account Inactive",
     message: "Your account is currently inactive. Please contact J Fudge Trucking for more information.",
+  },
+  suspended: {
+    icon: ShieldX,
+    iconBg: "bg-red-100",
+    iconColor: "text-red-600",
+    title: "Account Suspended",
+    message: "Your account has been suspended. Please contact J Fudge Trucking to resolve this issue.",
+  },
+  deactivated: {
+    icon: UserX,
+    iconBg: "bg-zinc-100",
+    iconColor: "text-zinc-500",
+    title: "Account Deactivated",
+    message: "Your account has been deactivated. If you believe this is an error, please contact J Fudge Trucking.",
+  },
+  rejected: {
+    icon: XCircle,
+    iconBg: "bg-red-100",
+    iconColor: "text-red-600",
+    title: "Application Rejected",
+    message: "Your application was not approved. Please contact J Fudge Trucking for more information.",
   },
 };
 

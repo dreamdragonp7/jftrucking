@@ -4,6 +4,13 @@ import { NextResponse, type NextRequest } from "next/server";
  * Cron: Send payment reminders.
  * Runs daily at 3 PM CT (21:00 UTC) via Vercel Cron.
  * Sends in-app + SMS reminders for overdue invoices.
+ *
+ * NOTE: This cron is supplementary to QuickBooks Online's native payment
+ * reminders. When QB is connected, QBO handles automatic reminders at
+ * configurable intervals (e.g. 5 and 15 days overdue). This cron only
+ * runs as a fallback when QB is NOT connected (e.g. during initial setup
+ * or if QB connection is lost). The Vercel cron schedule in vercel.json
+ * still fires daily, but the handler short-circuits when QB is active.
  */
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -12,7 +19,24 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  console.log("[Cron] Payment reminders started");
+  // Guard: skip if QB Online is connected (QB handles reminders natively)
+  try {
+    const { isConnected } = await import("@/lib/integrations/quickbooks");
+    const qbConnected = await isConnected();
+    if (qbConnected) {
+      console.log("[Cron] QB Online handles payment reminders natively. Skipping TMS reminders cron.");
+      return NextResponse.json({
+        status: "skipped",
+        reason: "QB Online handles payment reminders natively",
+        timestamp: new Date().toISOString(),
+      });
+    }
+  } catch {
+    // QB module not available or error checking -- fall through to TMS reminders
+    console.log("[Cron] Could not check QB connection status, running TMS reminders as fallback");
+  }
+
+  console.log("[Cron] Payment reminders started (QB not connected -- using TMS fallback)");
 
   let remindersSent = 0;
 
