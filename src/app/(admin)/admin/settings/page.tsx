@@ -5,6 +5,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import * as materialsData from "@/lib/data/materials.data";
 import * as profilesData from "@/lib/data/profiles.data";
 import * as settingsData from "@/lib/data/settings.data";
+import { requireRole } from "@/lib/supabase/auth";
 import { MaterialsSection } from "./_components/MaterialsSection";
 import { CompanyInfoSection } from "./_components/CompanyInfoSection";
 import { UserManagementSection } from "./_components/UserManagementSection";
@@ -17,7 +18,8 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 async function SettingsContent() {
-  const [materialsResult, profilesResult, allSettings] = await Promise.all([
+  const [auth, materialsResult, profilesResult, allSettings] = await Promise.all([
+    requireRole("admin"),
     materialsData.getAll(),
     profilesData.getAll({ limit: 100 }),
     settingsData.getAllSettings(),
@@ -33,7 +35,7 @@ async function SettingsContent() {
     <div className="space-y-6 max-w-3xl">
       <CompanyInfoSection />
       <BusinessRulesSection currentSettings={settingsMap} />
-      <UserManagementSection users={profilesResult.data} />
+      <UserManagementSection users={profilesResult.data} currentUserId={auth.user.id} />
       <MaterialsSection materials={materialsResult.data} />
     </div>
   );

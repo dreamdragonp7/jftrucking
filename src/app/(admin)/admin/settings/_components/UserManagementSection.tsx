@@ -50,13 +50,14 @@ import type { Profile, UserRole, ProfileStatus } from "@/types/database";
 
 interface UserManagementSectionProps {
   users: Profile[];
+  currentUserId: string;
 }
 
 // ---------------------------------------------------------------------------
 // UserManagementSection
 // ---------------------------------------------------------------------------
 
-export function UserManagementSection({ users }: UserManagementSectionProps) {
+export function UserManagementSection({ users, currentUserId }: UserManagementSectionProps) {
   const [addOpen, setAddOpen] = useState(false);
   const [newEmail, setNewEmail] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -199,14 +200,16 @@ export function UserManagementSection({ users }: UserManagementSectionProps) {
                       <Select
                         value={u.role}
                         onValueChange={(v) => handleRoleChange(u.id, v as UserRole)}
+                        disabled={u.id === currentUserId}
                       >
-                        <SelectTrigger className="w-[110px] h-8 text-xs">
+                        <SelectTrigger className="w-[110px] h-8 text-xs" title={u.id === currentUserId ? "Cannot change your own role" : undefined}>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="admin">Admin</SelectItem>
                           <SelectItem value="driver">Driver</SelectItem>
                           <SelectItem value="customer">Customer</SelectItem>
+                          <SelectItem value="carrier">Carrier</SelectItem>
                         </SelectContent>
                       </Select>
                       <Button

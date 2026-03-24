@@ -45,13 +45,20 @@ export async function updateUserRole(
   role: UserRole
 ): Promise<ActionResult<void>> {
   try {
-    await requireRole("admin");
+    const auth = await requireRole("admin");
+
+    // Prevent admins from changing their own role
+    if (userId === auth.user.id) {
+      return fail("You cannot change your own role.");
+    }
+
     await profilesData.update(userId, { role });
 
-    // Also update the user_metadata in Supabase Auth
+    // Sync role to BOTH app_metadata and user_metadata in Supabase Auth
     const supabase = createAdminClient();
     if (supabase) {
       await supabase.auth.admin.updateUserById(userId, {
+        app_metadata: { role },
         user_metadata: { role },
       });
     }

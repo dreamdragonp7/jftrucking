@@ -22,6 +22,13 @@ export async function GET(request: NextRequest) {
   console.log("[Cron] QuickBooks sync started");
 
   try {
+    // Log current QB environment
+    const { getCurrentQBEnvironment } = await import(
+      "@/lib/integrations/quickbooks/environment"
+    );
+    const currentEnv = await getCurrentQBEnvironment();
+    console.log(`[Cron] QB environment: ${currentEnv}`);
+
     // Check if QB is configured and connected
     const { isQBConfigured, isConnected } = await import(
       "@/lib/integrations/quickbooks"
@@ -83,13 +90,14 @@ export async function GET(request: NextRequest) {
               user_id: admin.id,
               type: "escalation" as const,
               title: "QuickBooks Sync Discrepancies",
-              message: `Daily QB reconciliation found ${result.discrepancies.length} discrepancy(s). Review in QuickBooks settings.`,
+              message: `Daily QB reconciliation (${currentEnv}) found ${result.discrepancies.length} discrepancy(s). Review in QuickBooks settings.`,
               channel: "in_app" as const,
               read: false,
               read_at: null,
               data: {
                 discrepancy_count: result.discrepancies.length,
                 discrepancies: result.discrepancies.slice(0, 5), // First 5 for preview
+                qb_environment: currentEnv,
               },
             }));
 

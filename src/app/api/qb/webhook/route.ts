@@ -93,7 +93,26 @@ interface QBWebhookPayload {
 async function processWebhookEvents(payload: QBWebhookPayload): Promise<void> {
   const notifications = payload.eventNotifications ?? [];
 
+  // Validate realmId against current environment's stored tokens
+  let expectedRealmId: string | null = null;
+  try {
+    const { getTokens } = await import("@/lib/integrations/quickbooks/tokens");
+    const tokens = await getTokens();
+    expectedRealmId = tokens?.realmId ?? null;
+  } catch {
+    // If we can't fetch tokens, proceed cautiously
+  }
+
   for (const notification of notifications) {
+    // Check if the webhook's realmId matches our stored realmId
+    if (expectedRealmId && notification.realmId !== expectedRealmId) {
+      console.warn(
+        `[QB Webhook] realmId mismatch: webhook has '${notification.realmId}', expected '${expectedRealmId}'. ` +
+        `This may be from a different QB environment. Skipping.`
+      );
+      continue;
+    }
+
     const entities = notification.dataChangeEvent?.entities ?? [];
 
     for (const entity of entities) {

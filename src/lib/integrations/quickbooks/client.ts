@@ -58,6 +58,10 @@ export function isQBConfigured(): boolean {
 /**
  * Get QuickBooks configuration from environment variables.
  * Returns null if not configured.
+ *
+ * NOTE: This is a synchronous function that reads from env vars only.
+ * For the authoritative environment, use getQBConfigAsync() which
+ * reads from the database.
  */
 export function getQBConfig(): QBConfig | null {
   if (!isQBConfigured()) return null;
@@ -71,15 +75,41 @@ export function getQBConfig(): QBConfig | null {
   };
 }
 
+/**
+ * Async version of getQBConfig() that reads environment from the database
+ * (qb_environment_state table) instead of just the env var.
+ * The env var is used as fallback for initial setup.
+ */
+export async function getQBConfigAsync(): Promise<QBConfig | null> {
+  if (!isQBConfigured()) return null;
+
+  let environment: "sandbox" | "production";
+  try {
+    const { getCurrentQBEnvironment } = await import("./environment");
+    environment = await getCurrentQBEnvironment();
+  } catch {
+    environment =
+      (process.env.QB_ENVIRONMENT as "sandbox" | "production") || "sandbox";
+  }
+
+  return {
+    clientId: process.env.QB_CLIENT_ID!,
+    clientSecret: process.env.QB_CLIENT_SECRET!,
+    environment,
+    redirectUri: process.env.QB_REDIRECT_URI!,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // OAuth 2.0 Flow
 // ---------------------------------------------------------------------------
 
 /**
  * Create a fresh intuit-oauth client instance.
+ * Uses getQBConfigAsync() to read environment from DB.
  */
 async function createOAuthClient() {
-  const config = getQBConfig();
+  const config = await getQBConfigAsync();
   if (!config) {
     throw new Error(
       "QuickBooks is not configured. Set QB_CLIENT_ID, QB_CLIENT_SECRET, and QB_REDIRECT_URI."
@@ -150,12 +180,13 @@ export async function handleCallback(
   );
 
   // Try to fetch company name from QBO
+  const currentConfig = (await getQBConfigAsync())!;
   let companyName: string | null = null;
   try {
     companyName = await fetchCompanyName(
       tokenData.access_token,
       realmId,
-      getQBConfig()!.environment
+      currentConfig.environment
     );
   } catch (companyErr) {
     console.warn("[QB] Failed to fetch company name (non-critical):", companyErr instanceof Error ? companyErr.message : companyErr);
@@ -211,8 +242,8 @@ export async function getClient(): Promise<QBClient | null> {
     }
   }
 
-  // Create node-quickbooks client
-  const config = getQBConfig()!;
+  // Create node-quickbooks client (use async config for DB-based environment)
+  const config = (await getQBConfigAsync())!;
   const QuickBooks = (await import("node-quickbooks")).default;
 
   const qbo = new QuickBooks(

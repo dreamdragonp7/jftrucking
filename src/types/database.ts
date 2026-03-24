@@ -53,6 +53,7 @@ export type QbSyncAction = "create" | "update" | "delete";
 export type QbSyncStatus = "pending" | "success" | "failed";
 export type AuditAction = "insert" | "update" | "delete";
 export type EntityStatus = "active" | "inactive";
+export type QbEnvironment = "sandbox" | "production";
 export type CarrierPaymentTerms = "net_7" | "net_14" | "net_30";
 export type TaxFormType = "w9" | "1099_nec";
 
@@ -94,6 +95,7 @@ export interface Customer {
   phone: string | null;
   payment_terms: PaymentTerms;
   qb_customer_id: string | null;
+  qb_environment: QbEnvironment | null;
   credit_limit: number;
   credit_limit_enabled: boolean;
   billing_cycle: BillingCycle;
@@ -118,6 +120,7 @@ export interface Carrier {
   mc_number: string | null;
   dot_number: string | null;
   qb_vendor_id: string | null;
+  qb_environment: QbEnvironment | null;
   insurance_expiry: string | null;
   w9_url: string | null;
   bank_routing_encrypted: string | null;
@@ -321,6 +324,7 @@ export interface Invoice {
   sent_at: string | null;
   paid_at: string | null;
   qb_invoice_id: string | null;
+  qb_environment: QbEnvironment | null;
   qb_payment_link: string | null;
   pdf_url: string | null;
   notes: string | null;
@@ -354,6 +358,7 @@ export interface Payment {
   payment_method: PaymentMethod;
   status: PaymentStatus;
   qb_payment_id: string | null;
+  qb_environment: QbEnvironment | null;
   ach_transaction_id: string | null;
   failure_reason: string | null;
   paid_at: string | null;
@@ -374,6 +379,7 @@ export interface CarrierSettlement {
   total_amount: number;
   status: SettlementStatus;
   qb_bill_id: string | null;
+  qb_environment: QbEnvironment | null;
   approved_by: string | null;
   approved_at: string | null;
   paid_at: string | null;
@@ -438,6 +444,7 @@ export interface QbSyncLog {
   action: QbSyncAction;
   qb_entity_type: string | null;
   qb_entity_id: string | null;
+  qb_environment: QbEnvironment | null;
   status: QbSyncStatus;
   error_message: string | null;
   synced_at: string | null;
@@ -452,6 +459,32 @@ export interface AuditLog {
   old_data: Record<string, unknown> | null;
   new_data: Record<string, unknown> | null;
   changed_by: string | null;
+  created_at: string;
+}
+
+// ============================================================================
+// QB ENVIRONMENT ISOLATION TABLES
+// ============================================================================
+
+export interface QbEnvironmentState {
+  id: number;
+  current_environment: QbEnvironment;
+  switched_at: string;
+  switched_by: string | null;
+  previous_environment: QbEnvironment | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface QbEnvironmentSwitchLog {
+  id: string;
+  from_environment: QbEnvironment;
+  to_environment: QbEnvironment;
+  switched_by: string | null;
+  sandbox_records_cleared: boolean;
+  production_records_backed_up: boolean;
+  notes: string | null;
   created_at: string;
 }
 
@@ -524,7 +557,7 @@ export type ProfileInsert = Omit<Profile, "created_at" | "updated_at" | "custome
   customer_id?: string | null;
 };
 
-export type CustomerInsert = Omit<Customer, "id" | "created_at" | "updated_at" | "billing_cycle" | "contact_name" | "vendor_number" | "vendor_portal_url"> & {
+export type CustomerInsert = Omit<Customer, "id" | "created_at" | "updated_at" | "billing_cycle" | "contact_name" | "vendor_number" | "vendor_portal_url" | "qb_environment"> & {
   id?: string;
   created_at?: string;
   updated_at?: string;
@@ -532,12 +565,14 @@ export type CustomerInsert = Omit<Customer, "id" | "created_at" | "updated_at" |
   contact_name?: string | null;
   vendor_number?: string | null;
   vendor_portal_url?: string | null;
+  qb_environment?: QbEnvironment | null;
 };
 
-export type CarrierInsert = Omit<Carrier, "id" | "created_at" | "updated_at"> & {
+export type CarrierInsert = Omit<Carrier, "id" | "created_at" | "updated_at" | "qb_environment"> & {
   id?: string;
   created_at?: string;
   updated_at?: string;
+  qb_environment?: QbEnvironment | null;
 };
 
 export type DriverInsert = Omit<Driver, "id" | "created_at" | "updated_at"> & {
@@ -604,10 +639,11 @@ export type DeliveryInsert = Omit<Delivery, "id" | "created_at" | "updated_at" |
   delivery_address?: string | null;
 };
 
-export type InvoiceInsert = Omit<Invoice, "id" | "created_at" | "updated_at"> & {
+export type InvoiceInsert = Omit<Invoice, "id" | "created_at" | "updated_at" | "qb_environment"> & {
   id?: string;
   created_at?: string;
   updated_at?: string;
+  qb_environment?: QbEnvironment | null;
 };
 
 export type InvoiceLineItemInsert = Omit<InvoiceLineItem, "id" | "created_at" | "cost_code" | "delivery_date" | "delivery_address"> & {
@@ -618,16 +654,18 @@ export type InvoiceLineItemInsert = Omit<InvoiceLineItem, "id" | "created_at" | 
   delivery_address?: string | null;
 };
 
-export type PaymentInsert = Omit<Payment, "id" | "created_at" | "updated_at"> & {
+export type PaymentInsert = Omit<Payment, "id" | "created_at" | "updated_at" | "qb_environment"> & {
   id?: string;
   created_at?: string;
   updated_at?: string;
+  qb_environment?: QbEnvironment | null;
 };
 
-export type CarrierSettlementInsert = Omit<CarrierSettlement, "id" | "created_at" | "updated_at"> & {
+export type CarrierSettlementInsert = Omit<CarrierSettlement, "id" | "created_at" | "updated_at" | "qb_environment"> & {
   id?: string;
   created_at?: string;
   updated_at?: string;
+  qb_environment?: QbEnvironment | null;
 };
 
 export type CarrierSettlementLineInsert = Omit<CarrierSettlementLine, "id" | "created_at"> & {
@@ -651,9 +689,10 @@ export type NotificationInsert = Omit<Notification, "id" | "created_at"> & {
   created_at?: string;
 };
 
-export type QbSyncLogInsert = Omit<QbSyncLog, "id" | "created_at"> & {
+export type QbSyncLogInsert = Omit<QbSyncLog, "id" | "created_at" | "qb_environment"> & {
   id?: string;
   created_at?: string;
+  qb_environment?: QbEnvironment | null;
 };
 
 export type AuditLogInsert = Omit<AuditLog, "id" | "created_at"> & {
@@ -900,6 +939,18 @@ export interface Database {
       };
       site_contacts: TableDef<SiteContact>;
       customer_addresses: TableDef<CustomerAddress>;
+      qb_environment_state: {
+        Row: QbEnvironmentState;
+        Insert: MakeOptional<QbEnvironmentState, "created_at" | "updated_at" | "switched_at">;
+        Update: Partial<QbEnvironmentState>;
+        Relationships: [];
+      };
+      qb_environment_switch_log: {
+        Row: QbEnvironmentSwitchLog;
+        Insert: MakeOptional<QbEnvironmentSwitchLog, "id" | "created_at">;
+        Update: Partial<QbEnvironmentSwitchLog>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -949,6 +1000,7 @@ export interface Database {
       purchase_order_type: PurchaseOrderType;
       carrier_payment_terms: CarrierPaymentTerms;
       tax_form_type: TaxFormType;
+      qb_environment: QbEnvironment;
     };
   };
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   CheckCircle,
   XCircle,
@@ -15,6 +16,8 @@ import {
   ArrowRightLeft,
   Unlink,
   ExternalLink,
+  ShieldCheck,
+  FlaskConical,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -39,6 +42,10 @@ import {
   runReconciliationAction,
   getQBSetupStatusAction,
 } from "../_actions/quickbooks.actions";
+import {
+  getQBEnvironmentAction,
+  switchQBEnvironmentAction,
+} from "../_actions/environment.actions";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -67,6 +74,12 @@ interface SetupStatus {
     qb_vendor_id: string | null;
   }>;
   materialCount: number;
+}
+
+interface EnvironmentSummary {
+  current: "sandbox" | "production";
+  sandbox: { customers: number; carriers: number; invoices: number; payments: number; settlements: number };
+  production: { customers: number; carriers: number; invoices: number; payments: number; settlements: number };
 }
 
 // ---------------------------------------------------------------------------
@@ -100,20 +113,50 @@ function formatRelativeTime(dateStr: string | null): string {
 export function QuickBooksClient() {
   const [status, setStatus] = useState<ConnectionStatus | null>(null);
   const [setupStatus, setSetupStatus] = useState<SetupStatus | null>(null);
+  const [envSummary, setEnvSummary] = useState<EnvironmentSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
+  const [showSwitchConfirm, setShowSwitchConfirm] = useState(false);
+
+  const searchParams = useSearchParams();
+
+  // Show OAuth callback feedback via URL search params
+  useEffect(() => {
+    const error = searchParams.get("error");
+    const connected = searchParams.get("connected");
+    const company = searchParams.get("company");
+
+    if (error) {
+      toast.error("QuickBooks connection failed", {
+        description: error === "access_denied"
+          ? "You denied access to QuickBooks."
+          : error,
+      });
+    } else if (connected === "true") {
+      toast.success(
+        company
+          ? `Connected to ${company}`
+          : "Successfully connected to QuickBooks"
+      );
+    }
+  }, [searchParams]);
 
   // Load data on mount
   useEffect(() => {
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   async function loadData() {
     setLoading(true);
     try {
-      const statusResult = await getQBConnectionStatusAction();
+      const [statusResult, envResult] = await Promise.all([
+        getQBConnectionStatusAction(),
+        getQBEnvironmentAction(),
+      ]);
 
       if (statusResult.success) setStatus(statusResult.data);
+      if (envResult.success) setEnvSummary(envResult.data);
 
       // Load setup status if connected
       if (statusResult.success && statusResult.data.connected) {
@@ -259,6 +302,32 @@ export function QuickBooksClient() {
     });
   }
 
+  // ---- Environment switch ----
+  async function handleSwitchEnvironment() {
+    const targetEnv =
+      envSummary?.current === "sandbox" ? "production" : "sandbox";
+
+    setShowSwitchConfirm(false);
+
+    startTransition(async () => {
+      const result = await switchQBEnvironmentAction(targetEnv);
+      if (result.success) {
+        toast.success(
+          `Switched to ${targetEnv} mode. ${result.data.cleared} QB record(s) cleared.`,
+          {
+            description:
+              "You will need to reconnect QuickBooks for the new environment.",
+          }
+        );
+        await loadData();
+      } else {
+        toast.error("Failed to switch environment", {
+          description: result.error,
+        });
+      }
+    });
+  }
+
   // ---- Render ----
 
   if (loading) {
@@ -277,6 +346,28 @@ export function QuickBooksClient() {
 
   return (
     <div className="space-y-6">
+      {/* ── Environment Banner ── */}
+      {envSummary?.current === "sandbox" && (
+        <div className="flex items-center gap-3 rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-amber-900">
+          <FlaskConical className="w-5 h-5 shrink-0 text-amber-600" />
+          <div className="flex-1">
+            <p className="text-sm font-medium">Sandbox Mode</p>
+            <p className="text-xs text-amber-700">
+              Connected to Intuit test environment. No real accounting data affected.
+            </p>
+          </div>
+          <Badge variant="secondary" className="bg-amber-200 text-amber-900 hover:bg-amber-200">
+            Sandbox
+          </Badge>
+        </div>
+      )}
+      {envSummary?.current === "production" && (
+        <div className="flex items-center gap-2 rounded-lg border border-green-200 bg-green-50 px-4 py-2">
+          <ShieldCheck className="w-4 h-4 text-green-600" />
+          <span className="text-xs font-medium text-green-700">Production</span>
+        </div>
+      )}
+
       {/* ── Connection Status Card ── */}
       <Card>
         <CardHeader>
@@ -412,6 +503,189 @@ export function QuickBooksClient() {
           </div>
         </CardContent>
       </Card>
+
+      {/* ── Environment Card ── */}
+      {envSummary && (
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div
+                  className={`flex items-center justify-center w-10 h-10 rounded-lg ${
+                    envSummary.current === "production"
+                      ? "bg-green-100 text-green-600"
+                      : "bg-amber-100 text-amber-600"
+                  }`}
+                >
+                  {envSummary.current === "production" ? (
+                    <ShieldCheck className="w-5 h-5" />
+                  ) : (
+                    <FlaskConical className="w-5 h-5" />
+                  )}
+                </div>
+                <div>
+                  <CardTitle className="text-base">
+                    QB Environment
+                  </CardTitle>
+                  <CardDescription>
+                    Currently operating in{" "}
+                    <span className="font-semibold">{envSummary.current}</span>{" "}
+                    mode
+                  </CardDescription>
+                </div>
+              </div>
+              <Badge
+                variant={
+                  envSummary.current === "production" ? "default" : "secondary"
+                }
+              >
+                {envSummary.current === "production" ? "Production" : "Sandbox"}
+              </Badge>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Record counts per environment */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="rounded-lg border p-3 space-y-2">
+                <h4 className="text-xs font-semibold text-amber-700 uppercase tracking-wide flex items-center gap-1.5">
+                  <FlaskConical className="w-3.5 h-3.5" />
+                  Sandbox Records
+                </h4>
+                <div className="grid grid-cols-2 gap-1 text-xs">
+                  <span className="text-[var(--color-text-muted)]">Customers</span>
+                  <span className="font-medium text-right">{envSummary.sandbox.customers}</span>
+                  <span className="text-[var(--color-text-muted)]">Carriers</span>
+                  <span className="font-medium text-right">{envSummary.sandbox.carriers}</span>
+                  <span className="text-[var(--color-text-muted)]">Invoices</span>
+                  <span className="font-medium text-right">{envSummary.sandbox.invoices}</span>
+                  <span className="text-[var(--color-text-muted)]">Payments</span>
+                  <span className="font-medium text-right">{envSummary.sandbox.payments}</span>
+                  <span className="text-[var(--color-text-muted)]">Settlements</span>
+                  <span className="font-medium text-right">{envSummary.sandbox.settlements}</span>
+                </div>
+              </div>
+              <div className="rounded-lg border p-3 space-y-2">
+                <h4 className="text-xs font-semibold text-green-700 uppercase tracking-wide flex items-center gap-1.5">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                  Production Records
+                </h4>
+                <div className="grid grid-cols-2 gap-1 text-xs">
+                  <span className="text-[var(--color-text-muted)]">Customers</span>
+                  <span className="font-medium text-right">{envSummary.production.customers}</span>
+                  <span className="text-[var(--color-text-muted)]">Carriers</span>
+                  <span className="font-medium text-right">{envSummary.production.carriers}</span>
+                  <span className="text-[var(--color-text-muted)]">Invoices</span>
+                  <span className="font-medium text-right">{envSummary.production.invoices}</span>
+                  <span className="text-[var(--color-text-muted)]">Payments</span>
+                  <span className="font-medium text-right">{envSummary.production.payments}</span>
+                  <span className="text-[var(--color-text-muted)]">Settlements</span>
+                  <span className="font-medium text-right">{envSummary.production.settlements}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Switch button */}
+            {envSummary.current === "sandbox" && (
+              <div>
+                {!showSwitchConfirm ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowSwitchConfirm(true)}
+                    disabled={isPending}
+                    className="text-green-700 border-green-300 hover:bg-green-50"
+                  >
+                    <ShieldCheck className="w-4 h-4 mr-2" />
+                    Switch to Production
+                  </Button>
+                ) : (
+                  <div className="rounded-lg border border-red-200 bg-red-50 p-4 space-y-3">
+                    <p className="text-sm font-medium text-red-900">
+                      Confirm: Switch to Production
+                    </p>
+                    <p className="text-xs text-red-700">
+                      This will clear all sandbox QB IDs from your TMS records and
+                      disconnect your current sandbox QuickBooks session. You will need
+                      to reconnect QuickBooks using your production company credentials.
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={handleSwitchEnvironment}
+                        disabled={isPending}
+                        className="bg-green-600 hover:bg-green-700 text-white"
+                      >
+                        {isPending ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <ShieldCheck className="w-4 h-4 mr-2" />
+                        )}
+                        Yes, Switch to Production
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setShowSwitchConfirm(false)}
+                        disabled={isPending}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            {envSummary.current === "production" && (
+              <div>
+                {!showSwitchConfirm ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowSwitchConfirm(true)}
+                    disabled={isPending}
+                    className="text-amber-700 border-amber-300 hover:bg-amber-50"
+                  >
+                    <FlaskConical className="w-4 h-4 mr-2" />
+                    Switch to Sandbox
+                  </Button>
+                ) : (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
+                    <p className="text-sm font-medium text-amber-900">
+                      Confirm: Switch to Sandbox
+                    </p>
+                    <p className="text-xs text-amber-700">
+                      This will disconnect your production QuickBooks session. Production
+                      QB IDs will remain on your records but will not be used until you
+                      switch back. You will need to reconnect using sandbox credentials.
+                    </p>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        onClick={handleSwitchEnvironment}
+                        disabled={isPending}
+                        className="bg-amber-600 hover:bg-amber-700 text-white"
+                      >
+                        {isPending ? (
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                        ) : (
+                          <FlaskConical className="w-4 h-4 mr-2" />
+                        )}
+                        Yes, Switch to Sandbox
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setShowSwitchConfirm(false)}
+                        disabled={isPending}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Only show setup & sync controls when connected */}
       {status?.connected && (

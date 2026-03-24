@@ -5,6 +5,7 @@ import {
   getOAuthState,
   clearOAuthState,
 } from "@/lib/integrations/quickbooks/tokens";
+import { getCurrentQBEnvironment } from "@/lib/integrations/quickbooks/environment";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -73,8 +74,9 @@ export async function GET(request: NextRequest) {
     const callbackUrl = request.nextUrl.toString();
     const result = await handleCallback(callbackUrl);
 
+    const currentEnv = await getCurrentQBEnvironment();
     console.log(
-      `[QB Callback] Successfully connected to QuickBooks. Realm: ${result.realmId}, Company: ${result.companyName}`
+      `[QB Callback] Successfully connected to QuickBooks (${currentEnv}). Realm: ${result.realmId}, Company: ${result.companyName}`
     );
 
     // Fire-and-forget: auto-setup customers, vendors, and service items in QBO

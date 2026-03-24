@@ -21,10 +21,12 @@ import {
   getLastSyncTime,
   type QBClient,
 } from "@/lib/integrations/quickbooks";
+import { getCurrentQBEnvironment } from "@/lib/integrations/quickbooks/environment";
 import { getBusinessSetting } from "@/lib/utils/settings";
 import type {
   QbSyncAction,
   QbSyncStatus,
+  QbEnvironment,
 } from "@/types/database";
 
 // ---------------------------------------------------------------------------
@@ -39,10 +41,13 @@ async function logSync(params: {
   qbEntityId?: string;
   status: QbSyncStatus;
   errorMessage?: string;
+  qbEnvironment?: QbEnvironment;
 }): Promise<void> {
   try {
     const supabase = createAdminClient();
     if (!supabase) return;
+
+    const env = params.qbEnvironment ?? await getCurrentQBEnvironment();
 
     await supabase.from("qb_sync_log").insert({
       entity_type: params.entityType,
@@ -50,6 +55,7 @@ async function logSync(params: {
       action: params.action,
       qb_entity_type: params.qbEntityType ?? null,
       qb_entity_id: params.qbEntityId ?? null,
+      qb_environment: env,
       status: params.status,
       error_message: params.errorMessage ?? null,
       synced_at: params.status === "success" ? new Date().toISOString() : null,
@@ -158,10 +164,11 @@ export async function createOrUpdateCustomer(customer: {
     const result = await qb.createCustomer(qbCustomer);
     const qbId = String(result.Id);
 
-    // Store qb_customer_id back in Supabase
+    // Store qb_customer_id back in Supabase with environment tag
+    const env = await getCurrentQBEnvironment();
     const { error: linkErr } = await supabase
       .from("customers")
-      .update({ qb_customer_id: qbId })
+      .update({ qb_customer_id: qbId, qb_environment: env })
       .eq("id", customer.id);
 
     if (linkErr) {
@@ -262,10 +269,11 @@ export async function createOrUpdateVendor(carrier: {
     const result = await qb.createVendor(qbVendor);
     const qbId = String(result.Id);
 
-    // Store qb_vendor_id back in Supabase
+    // Store qb_vendor_id back in Supabase with environment tag
+    const env = await getCurrentQBEnvironment();
     const { error: linkErr } = await supabase
       .from("carriers")
-      .update({ qb_vendor_id: qbId })
+      .update({ qb_vendor_id: qbId, qb_environment: env })
       .eq("id", carrier.id);
 
     if (linkErr) {
@@ -502,10 +510,11 @@ export async function syncInvoiceToQBO(
     const result = await qb.createInvoice(qbInvoice);
     const qbInvoiceId = String(result.Id);
 
-    // Store qb_invoice_id back in Supabase
+    // Store qb_invoice_id back in Supabase with environment tag
+    const env = await getCurrentQBEnvironment();
     const { error: invoiceLinkErr } = await supabase
       .from("invoices")
-      .update({ qb_invoice_id: qbInvoiceId })
+      .update({ qb_invoice_id: qbInvoiceId, qb_environment: env })
       .eq("id", invoiceId);
 
     if (invoiceLinkErr) {
@@ -675,10 +684,11 @@ export async function syncSettlementToQBO(
     const result = await qb.createBill(qbBill);
     const qbBillId = String(result.Id);
 
-    // Store qb_bill_id back in Supabase
+    // Store qb_bill_id back in Supabase with environment tag
+    const env = await getCurrentQBEnvironment();
     const { error: billLinkErr } = await supabase
       .from("carrier_settlements")
-      .update({ qb_bill_id: qbBillId })
+      .update({ qb_bill_id: qbBillId, qb_environment: env })
       .eq("id", settlementId);
 
     if (billLinkErr) {
@@ -878,7 +888,8 @@ export async function syncPaymentFromQBO(
         continue;
       }
 
-      // Create payment record in Supabase
+      // Create payment record in Supabase with environment tag
+      const paymentEnv = await getCurrentQBEnvironment();
       const { error: payInsertErr } = await supabase.from("payments").insert({
         invoice_id: invoice.id,
         customer_id: invoice.customer_id,
@@ -886,6 +897,7 @@ export async function syncPaymentFromQBO(
         payment_method: "ach" as const,
         status: "completed" as const,
         qb_payment_id: qbPaymentId,
+        qb_environment: paymentEnv,
         paid_at: txnDate,
         recorded_at: new Date().toISOString(),
       });
@@ -1295,6 +1307,7 @@ export async function syncAllSettlements(): Promise<{
 
 /**
  * Get connection status info for the admin QuickBooks page.
+ * Environment is read from the DB (single source of truth), not just env var.
  */
 export async function getConnectionStatus(): Promise<{
   connected: boolean;
@@ -1309,12 +1322,13 @@ export async function getConnectionStatus(): Promise<{
     "@/lib/integrations/quickbooks/tokens"
   );
   const tokens = await fetchTokens();
+  const env = await getCurrentQBEnvironment();
 
   if (!tokens) {
     return {
       connected: false,
       companyName: null,
-      environment: process.env.QB_ENVIRONMENT ?? "sandbox",
+      environment: env,
       connectedAt: null,
       lastSyncTime: null,
       tokenExpiresAt: null,
@@ -1327,7 +1341,7 @@ export async function getConnectionStatus(): Promise<{
   return {
     connected: true,
     companyName: tokens.companyName,
-    environment: process.env.QB_ENVIRONMENT ?? "sandbox",
+    environment: env,
     connectedAt: tokens.connectedAt,
     lastSyncTime,
     tokenExpiresAt: tokens.accessTokenExpiresAt,

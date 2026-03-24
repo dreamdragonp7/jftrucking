@@ -5,13 +5,14 @@
  * Uses the admin (service role) client to bypass RLS since tokens
  * should never be accessible from the browser.
  *
- * Keys stored:
- *   qb_access_token, qb_refresh_token, qb_realm_id,
- *   qb_access_token_expires_at, qb_refresh_token_expires_at,
- *   qb_company_name, qb_connected_at
+ * Keys are namespaced by environment:
+ *   qb_sandbox_access_token, qb_production_access_token, etc.
+ *
+ * Legacy (non-prefixed) keys are auto-migrated to sandbox on first read.
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import type { QbEnvironment } from "@/types/database";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -64,11 +65,65 @@ async function deleteSettingValue(key: string): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
+// Environment-aware key helpers
+// ---------------------------------------------------------------------------
+
+/** The 7 token key suffixes. Prefix with `qb_{env}_` to get full key. */
+const TOKEN_SUFFIXES = [
+  "access_token",
+  "refresh_token",
+  "realm_id",
+  "access_token_expires_at",
+  "refresh_token_expires_at",
+  "company_name",
+  "connected_at",
+] as const;
+
+/** Build environment-namespaced key: e.g. "qb_sandbox_access_token" */
+function envKey(env: QbEnvironment, suffix: string): string {
+  return `qb_${env}_${suffix}`;
+}
+
+/**
+ * Resolve current QB environment.
+ * Lazy-imports environment.ts to avoid circular dependency
+ * (environment.ts imports from admin.ts, not from tokens.ts).
+ */
+async function resolveEnvironment(): Promise<QbEnvironment> {
+  const { getCurrentQBEnvironment } = await import("./environment");
+  return getCurrentQBEnvironment();
+}
+
+/**
+ * Auto-migrate legacy (non-prefixed) token keys to sandbox-prefixed keys.
+ * Called once during getTokens() if legacy keys are detected.
+ */
+async function migrateLegacyTokens(): Promise<void> {
+  const legacyAccess = await getSettingValue("qb_access_token");
+  if (!legacyAccess) return; // No legacy tokens to migrate
+
+  console.log("[QB Tokens] Migrating legacy token keys to sandbox namespace...");
+
+  for (const suffix of TOKEN_SUFFIXES) {
+    const legacyKey = `qb_${suffix}`;
+    const newKey = envKey("sandbox", suffix);
+    const value = await getSettingValue(legacyKey);
+    if (value) {
+      await setSettingValue(newKey, value);
+      await deleteSettingValue(legacyKey);
+    }
+  }
+
+  console.log("[QB Tokens] Legacy token migration complete");
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
 /**
  * Save OAuth tokens after initial authorization or token refresh.
+ * Tokens are stored under the CURRENT environment prefix.
  */
 export async function saveTokens(params: {
   accessToken: string;
@@ -77,32 +132,49 @@ export async function saveTokens(params: {
   accessTokenExpiresAt: Date;
   refreshTokenExpiresAt: Date;
   companyName?: string;
+  environment?: QbEnvironment;
 }): Promise<void> {
+  const env = params.environment ?? await resolveEnvironment();
+
   await Promise.all([
-    setSettingValue("qb_access_token", params.accessToken),
-    setSettingValue("qb_refresh_token", params.refreshToken),
-    setSettingValue("qb_realm_id", params.realmId),
+    setSettingValue(envKey(env, "access_token"), params.accessToken),
+    setSettingValue(envKey(env, "refresh_token"), params.refreshToken),
+    setSettingValue(envKey(env, "realm_id"), params.realmId),
     setSettingValue(
-      "qb_access_token_expires_at",
+      envKey(env, "access_token_expires_at"),
       params.accessTokenExpiresAt.toISOString()
     ),
     setSettingValue(
-      "qb_refresh_token_expires_at",
+      envKey(env, "refresh_token_expires_at"),
       params.refreshTokenExpiresAt.toISOString()
     ),
     params.companyName
-      ? setSettingValue("qb_company_name", params.companyName)
+      ? setSettingValue(envKey(env, "company_name"), params.companyName)
       : Promise.resolve(),
-    setSettingValue("qb_connected_at", new Date().toISOString()),
+    setSettingValue(envKey(env, "connected_at"), new Date().toISOString()),
   ]);
 }
 
 /**
- * Get current stored tokens. Returns null if not connected.
+ * Get current stored tokens for the CURRENT environment.
+ * Auto-migrates legacy non-prefixed keys to sandbox on first access.
+ * Returns null if not connected.
  */
 export async function getTokens(): Promise<StoredQBTokens | null> {
+  const env = await resolveEnvironment();
+
+  // Try environment-prefixed keys first
+  let accessToken = await getSettingValue(envKey(env, "access_token"));
+
+  // If no env-prefixed token, check for legacy keys and migrate
+  if (!accessToken) {
+    await migrateLegacyTokens();
+    accessToken = await getSettingValue(envKey(env, "access_token"));
+  }
+
+  if (!accessToken) return null;
+
   const [
-    accessToken,
     refreshToken,
     realmId,
     accessTokenExpiresAt,
@@ -110,16 +182,15 @@ export async function getTokens(): Promise<StoredQBTokens | null> {
     companyName,
     connectedAt,
   ] = await Promise.all([
-    getSettingValue("qb_access_token"),
-    getSettingValue("qb_refresh_token"),
-    getSettingValue("qb_realm_id"),
-    getSettingValue("qb_access_token_expires_at"),
-    getSettingValue("qb_refresh_token_expires_at"),
-    getSettingValue("qb_company_name"),
-    getSettingValue("qb_connected_at"),
+    getSettingValue(envKey(env, "refresh_token")),
+    getSettingValue(envKey(env, "realm_id")),
+    getSettingValue(envKey(env, "access_token_expires_at")),
+    getSettingValue(envKey(env, "refresh_token_expires_at")),
+    getSettingValue(envKey(env, "company_name")),
+    getSettingValue(envKey(env, "connected_at")),
   ]);
 
-  if (!accessToken || !refreshToken || !realmId) {
+  if (!refreshToken || !realmId) {
     return null;
   }
 
@@ -137,22 +208,19 @@ export async function getTokens(): Promise<StoredQBTokens | null> {
 }
 
 /**
- * Delete all stored tokens (disconnect from QuickBooks).
+ * Delete tokens for a SPECIFIC environment.
+ * If no environment is specified, deletes tokens for the CURRENT environment.
  */
-export async function deleteTokens(): Promise<void> {
-  await Promise.all([
-    deleteSettingValue("qb_access_token"),
-    deleteSettingValue("qb_refresh_token"),
-    deleteSettingValue("qb_realm_id"),
-    deleteSettingValue("qb_access_token_expires_at"),
-    deleteSettingValue("qb_refresh_token_expires_at"),
-    deleteSettingValue("qb_company_name"),
-    deleteSettingValue("qb_connected_at"),
-  ]);
+export async function deleteTokens(targetEnv?: QbEnvironment): Promise<void> {
+  const env = targetEnv ?? await resolveEnvironment();
+
+  await Promise.all(
+    TOKEN_SUFFIXES.map((suffix) => deleteSettingValue(envKey(env, suffix)))
+  );
 }
 
 /**
- * Check if QuickBooks is connected (tokens exist).
+ * Check if QuickBooks is connected (tokens exist for current environment).
  */
 export async function isConnected(): Promise<boolean> {
   const tokens = await getTokens();

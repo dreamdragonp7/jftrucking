@@ -1,5 +1,6 @@
 export {
   getQBConfig,
+  getQBConfigAsync,
   isQBConfigured,
   getAuthorizationUrl,
   handleCallback,
@@ -19,3 +20,10 @@ export {
   setLastSyncTime,
 } from "./tokens";
 export type { StoredQBTokens } from "./tokens";
+
+export {
+  getCurrentQBEnvironment,
+  assertEnvironmentMatch,
+  switchEnvironment,
+  getEnvironmentSummary,
+} from "./environment";
